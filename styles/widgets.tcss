@@ -1,0 +1,22 @@
+MetronomeDisplay {
+    align: center middle;
+    background: $surface;
+    border: solid green;
+    /* Removed height: 100% (Let app.tcss handle dimensions via the ID) */
+    text-align: center;
+}
+
+#beat_digits {
+    width: 100%;
+    text-align: center;
+    color: $text;
+    height: auto;
+}
+
+#sub_dots {
+    width: 100%;
+    text-align: center;
+    text-style: bold;
+    color: grey;
+    margin-top: 1;
+}

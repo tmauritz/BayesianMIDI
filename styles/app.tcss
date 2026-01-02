@@ -1,0 +1,44 @@
+Screen {
+    layout: vertical;
+}
+
+#sidebar {
+    width: 30;
+    dock: left;
+    background: $panel;
+    padding: 1;
+    border-right: solid $accent;
+}
+
+#main_area {
+    layout: horizontal;
+    height: 100%;
+}
+
+#metronome_box {
+    width: 40%;
+    height: 100%;
+}
+
+#right_column {
+    width: 60%;
+    height: 100%;
+    layout: vertical;
+}
+
+#input_log {
+    height: 50%;
+    border: solid yellow;
+    background: $surface;
+}
+
+#output_log {
+    height: 50%;
+    border: solid cyan;
+    background: $surface;
+}
+
+#toggle_clock {
+    margin-top: 2;
+    width: 100%;
+}
