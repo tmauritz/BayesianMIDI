@@ -1,5 +1,5 @@
 # Bayesian MIDI Performer
-
+![demo_screen.svg](demo_screen.svg)
 ## Installation
 1. **Create a virtual environment (recommended):**
 ```bash
