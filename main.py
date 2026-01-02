@@ -122,15 +122,17 @@ class BayesianMidiPerformer(App):
             with mido.open_input(port_name) as port:
                 self.current_port = port
 
-                # blocking loop
-                for msg in port:
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    log_target = self.query_one("#input_log", RichLog)
+                # non-blocking loop
+                while self.processing_active:
+                    for msg in port.iter_pending():
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        log_target = self.query_one("#input_log", RichLog)
 
-                    if msg.type == 'note_on':
-                        self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note}[/]")
-                    else:
-                        self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
+                        if msg.type == 'note_on':
+                            self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note}[/]")
+                        else:
+                            self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
+                    time.sleep(0.01) # sleep briefly to prevent high CPU usage
 
         except Exception as e:
             self.call_from_thread(self.query_one("#input_log", RichLog).write, f"[red]Error: {e}[/]")
