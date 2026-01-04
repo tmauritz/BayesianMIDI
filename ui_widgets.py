@@ -1,6 +1,8 @@
 from textual.app import ComposeResult
-from textual.containers import Vertical
-from textual.widgets import Digits, Label
+from textual.containers import Vertical, Container
+from textual.widgets import Digits, Input, Label
+from textual.containers import Horizontal
+
 
 
 class MetronomeDisplay(Vertical):

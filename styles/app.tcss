@@ -38,7 +38,48 @@ Screen {
     background: $surface;
 }
 
-#toggle_clock {
+#toggle_clock, #open_settings_btn {
     margin-top: 2;
     width: 100%;
+}
+
+/* The background overlay (dimmed) */
+SettingsScreen {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+}
+
+/* The actual popup box */
+#dialog {
+    width: 60;
+    height: auto;
+    border: thick $accent;
+    background: $surface;
+    padding: 2;
+}
+
+#dialog_title {
+    text-align: center;
+    width: 100%;
+    text-style: bold;
+    margin-bottom: 2;
+    border-bottom: solid $primary;
+}
+
+#settings_grid {
+    layout: grid;
+    grid-size: 2;         /* 2 columns: Label, Input */
+    grid-columns: 1fr 1fr;
+    grid-gutter: 1;       /* Space between rows/cols */
+    margin-bottom: 2;
+}
+
+#dialog_buttons {
+    align: center bottom;
+    height: auto;
+}
+
+SettingsScreen Input {
+    width: 100%;
+    border: solid $primary;
 }

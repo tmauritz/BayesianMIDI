@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
 from textual import work
 
+from SettingsModal import SettingsScreen
 # --- LOCAL IMPORTS ---
 from tempo_engine import TempoEngine
 from ui_widgets import MetronomeDisplay
@@ -41,6 +42,7 @@ class BayesianMidiPerformer(App):
                     allow_blank=False
                 )
 
+                yield Button("Settings", id="open_settings_btn", variant="primary")
                 yield Button("START", id="toggle_clock", variant="success")
                 yield Static("\nStatus:\n[red]OFF[/]", id="status_label")
 
@@ -87,6 +89,9 @@ class BayesianMidiPerformer(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "toggle_clock":
             self.action_toggle_play()
+        if event.button.id == "open_settings_btn":
+            # Push the screen onto the stack
+            self.push_screen(SettingsScreen())
 
     def on_mount(self):
         self.run_clock()
