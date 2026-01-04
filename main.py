@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
 from textual import work
 
+from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
 # --- LOCAL IMPORTS ---
 from tempo_engine import TempoEngine
@@ -24,6 +25,7 @@ class BayesianMidiPerformer(App):
         self.processing_active = True
         self.clock_running = False
         self.tempo_engine = TempoEngine(bpm=120)
+        self.settings = PerformanceSettings()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -71,6 +73,15 @@ class BayesianMidiPerformer(App):
         else:
             btn.label, btn.variant = "START", "success"
             self.query_one("#output_log", RichLog).write("[bold red]⏹ Performance Stopped[/]")
+
+    def action_dispatch_midi(self, note: int) -> None:
+        """
+        Passes the MIDI note to the active screen if it has a handler.
+        This must run on the main thread.
+        """
+        # check if the current screen has a 'handle_midi_input' method
+        if hasattr(self.screen, "handle_midi_input"):
+            self.screen.handle_midi_input(note)
 
     def get_midi_ports(self):
         try:
@@ -133,8 +144,11 @@ class BayesianMidiPerformer(App):
                         timestamp = datetime.now().strftime("%H:%M:%S")
                         log_target = self.query_one("#input_log", RichLog)
 
+                        note_type = self.app.settings.identify(msg.note)
+
                         if msg.type == 'note_on':
-                            self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note}[/]")
+                            self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({note_type})[/]")
+                            self.call_from_thread(self.action_dispatch_midi, msg.note)
                         else:
                             self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
                     time.sleep(0.01) # sleep briefly to prevent high CPU usage
