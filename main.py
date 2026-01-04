@@ -6,7 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
 from textual import work
 
-from bayesian_network import BayesianInput, BayesianOutput, BayesianMusicGenerator
+from bayesian_network import BayesianInput, BayesianOutput, BayesianMusicGenerator, DrumType
 from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
 from tempo_engine import TempoEngine
@@ -144,12 +144,12 @@ class BayesianMidiPerformer(App):
                         note_type = self.app.settings.identify(msg.note)
 
                         if msg.type == 'note_on':
-                            self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({note_type})[/]")
+                            # self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({str(note_type)})[/]")
                             self.call_from_thread(self.action_dispatch_midi, msg.note)
                             if self.clock_running:
                                 self.call_from_thread(self.app.midi_buffer.append, (note_type, msg.velocity))
-                        else:
-                            self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
+                        # else:
+                            # self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
                     time.sleep(0.01) # sleep briefly to prevent high CPU usage
 
         except Exception as e:
@@ -170,7 +170,7 @@ class BayesianMidiPerformer(App):
         # 2. DETERMINE DOMINANT INPUT
         # If the drummer played a Kick AND a Snare, which one wins?
         # Logic: Kicks take priority for downbeats, otherwise take the loudest.
-        dominant_drum = "None"
+        dominant_drum = DrumType.NONE
         max_velocity = 0
 
         if recent_events:

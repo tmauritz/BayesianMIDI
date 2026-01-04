@@ -27,13 +27,13 @@ Screen {
 }
 
 #input_log {
-    height: 50%;
+    height: 20%;
     border: solid yellow;
     background: $surface;
 }
 
 #output_log {
-    height: 50%;
+    height: 70%;
     border: solid cyan;
     background: $surface;
 }

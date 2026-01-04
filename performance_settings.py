@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from bayesian_network import DrumType
+
+
 @dataclass
 class PerformanceSettings:
     """Stores all configurable parameters for the performance."""
@@ -7,7 +10,7 @@ class PerformanceSettings:
     snare_note: int = 65
     rim_note: int = 67
 
-    def identify(self, note: int) -> str | None:
+    def identify(self, note: int) -> DrumType:
         """
         Returns the name of the instrument for a given MIDI note,
         or None if the note is not mapped.
@@ -15,9 +18,9 @@ class PerformanceSettings:
 
         #TODO: is there a more elegant way?
         if note == self.kick_note:
-            return "Kick"
+            return DrumType.KICK
         if note == self.snare_note:
-            return "Snare"
+            return DrumType.SNARE
         if note == self.rim_note:
-            return "Rim"
-        return None
+            return DrumType.RIM
+        return DrumType.NONE
