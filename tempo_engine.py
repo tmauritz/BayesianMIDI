@@ -6,7 +6,8 @@ class TempoEngine:
         self.steps_per_beat = steps_per_beat
         self.interval = (60.0 / self.bpm) / self.steps_per_beat
         self.last_tick_time = time.perf_counter()
-        self.step_counter = 0
+        self.step_count = 0
+        self.bar_count = 0
 
     def set_bpm(self, new_bpm):
         self.bpm = new_bpm
@@ -16,10 +17,12 @@ class TempoEngine:
         now = time.perf_counter()
         if now - self.last_tick_time >= self.interval:
             self.last_tick_time += self.interval
-            self.step_counter += 1
+            self.step_count = (self.step_count + 1) % (self.steps_per_beat*4)
+            if self.step_count == 0:
+                self.bar_count = (self.bar_count + 1) % 4
             return True
         return False
 
     def reset(self):
-        self.step_counter = 0
+        self.step_count = 0
         self.last_tick_time = time.perf_counter()

@@ -3,9 +3,9 @@ from dataclasses import dataclass
 @dataclass
 class PerformanceSettings:
     """Stores all configurable parameters for the performance."""
-    kick_note: int = 36
-    snare_note: int = 38
-    rim_note: int = 37
+    kick_note: int = 60
+    snare_note: int = 65
+    rim_note: int = 67
 
     def identify(self, note: int) -> str | None:
         """

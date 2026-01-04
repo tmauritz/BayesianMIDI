@@ -6,9 +6,9 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
 from textual import work
 
+from bayesian_network import BayesianInput, BayesianOutput, BayesianMusicGenerator
 from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
-# --- LOCAL IMPORTS ---
 from tempo_engine import TempoEngine
 from ui_widgets import MetronomeDisplay
 
@@ -16,7 +16,6 @@ from ui_widgets import MetronomeDisplay
 class BayesianMidiPerformer(App):
 
     CSS_PATH = ["styles/app.tcss", "styles/widgets.tcss"]
-
     BINDINGS = [("space", "toggle_play", "Start/Stop")]
 
     def __init__(self):
@@ -25,7 +24,9 @@ class BayesianMidiPerformer(App):
         self.processing_active = True
         self.clock_running = False
         self.tempo_engine = TempoEngine(bpm=120)
+        self.bayesian_engine = BayesianMusicGenerator()
         self.settings = PerformanceSettings()
+        self.midi_buffer = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -111,19 +112,16 @@ class BayesianMidiPerformer(App):
     def run_clock(self):
         while self.processing_active:
             if self.clock_running and self.tempo_engine.check_tick():
-                total_steps = self.tempo_engine.step_counter
-                beat = ((total_steps // 4) % 4) + 1
-                sub = total_steps % 4
-
+                steps = self.tempo_engine.step_count
+                beat = ((steps // 4) % 4) + 1
+                sub = steps % 4
                 self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub)
+                # Network Logic
+                # Grab all notes that happened since the last tick
+                recent_events = self.midi_buffer[:]
+                self.midi_buffer.clear()  # Reset for next tick
 
-                # Simulation Logic
-                if sub == 0 and beat == 1:
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    self.call_from_thread(
-                        self.query_one("#output_log", RichLog).write,
-                        f"[cyan]{timestamp} Generated: Bass Note (C2)[/]"
-                    )
+                self.process_bayesian_step(recent_events, beat, sub)
 
             time.sleep(0.002 if self.clock_running else 0.1)
 
@@ -143,12 +141,13 @@ class BayesianMidiPerformer(App):
                     for msg in port.iter_pending():
                         timestamp = datetime.now().strftime("%H:%M:%S")
                         log_target = self.query_one("#input_log", RichLog)
-
                         note_type = self.app.settings.identify(msg.note)
 
                         if msg.type == 'note_on':
                             self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({note_type})[/]")
                             self.call_from_thread(self.action_dispatch_midi, msg.note)
+                            if self.clock_running:
+                                self.call_from_thread(self.app.midi_buffer.append, (note_type, msg.velocity))
                         else:
                             self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
                     time.sleep(0.01) # sleep briefly to prevent high CPU usage
@@ -160,6 +159,65 @@ class BayesianMidiPerformer(App):
         self.processing_active = False
         if self.current_port: self.current_port.close()
 
+    @work(thread=True)
+    def process_bayesian_step(self, recent_events, beat, sub):
+        """
+        Called by the metronome every 16th note.
+        2. Updates Bayesian State (Density/Energy).
+        3. Infers output.
+        """
+
+        # 2. DETERMINE DOMINANT INPUT
+        # If the drummer played a Kick AND a Snare, which one wins?
+        # Logic: Kicks take priority for downbeats, otherwise take the loudest.
+        dominant_drum = "None"
+        max_velocity = 0
+
+        if recent_events:
+            # Simple logic: take the loudest hit
+            for d_type, vel in recent_events:
+                if vel > max_velocity:
+                    max_velocity = vel
+                    dominant_drum = d_type
+
+        # 3. BUILD EVIDENCE (Using your Chapter 5 Structure)
+        # Calculate Step (1-16) based on Beat (1-4) and Sub (0-3)
+        current_step = ((beat - 1) * 4) + sub + 1
+
+        evidence = BayesianInput(
+            drum_type=dominant_drum,
+            velocity=max_velocity,
+            bar=self.tempo_engine.bar_count,
+            step=current_step
+        )
+
+        # 4. INFER & ACT
+        result = self.bayesian_engine.infer(evidence)
+        self.call_from_thread(self.log_generation, result)
+
+    def log_generation(self, result: BayesianOutput) -> None:
+        """
+        Updates the Output Log with the decision made by the Bayesian Engine.
+        Must be called via self.call_from_thread if used in a worker.
+        """
+        log_widget = self.query_one("#output_log", RichLog)
+
+        # Get current timestamp
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        if result.should_play:
+            # Format: [12:00:01] Kick -> I (Root) -> Note 60
+            message = (
+                f"[{timestamp}] [bold green]PLAY[/] "
+                f"Note: {result.midi_note} (Vel: {result.velocity}) | "
+                f"[dim]{result.debug_info}[/]"
+            )
+        else:
+            # Optional: Log 'Rest' decisions if you want to see the engine thinking
+            # message = f"[{timestamp}] [dim]... Rest ({result.debug_info})[/]"
+            return
+
+        log_widget.write(message)
 
 if __name__ == "__main__":
     app = BayesianMidiPerformer()
