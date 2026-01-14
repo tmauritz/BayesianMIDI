@@ -14,7 +14,7 @@ source venv/bin/activate
 
 2.**Install dependencies:**
  ```bash
-pip install textual mido python-rtmidi   
+pip install textual mido python-rtmidi pyAgrum  
 ```
 
 ## Usage
