@@ -2,8 +2,6 @@ import mido
 import time
 from datetime import datetime
 
-from aiohttp_jinja2 import render_string
-from mido import Message
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
@@ -18,7 +16,7 @@ from ui_widgets import MetronomeDisplay
 
 class BayesianMidiPerformer(App):
 
-    CSS_PATH = ["styles/app.tcss", "styles/widgets.tcss"]
+    CSS_PATH = ["styles/app.tcss", "styles/widgets.tcss", "styles/settings.tcss"]
     BINDINGS = [("space", "toggle_play", "Start/Stop")]
 
     def __init__(self):
@@ -38,10 +36,6 @@ class BayesianMidiPerformer(App):
         with Horizontal(id="main_area"):
             # LEFT: Sidebar
             with Vertical(id="sidebar"):
-                yield Label("MIDI Input:")
-                yield Select(options=self.get_midi_input_ports(), id="input_port_selector")
-                yield Label("MIDI Output:")
-                yield Select(options=self.get_midi_output_ports(), id="output_port_selector")
 
                 yield Label("\nTempo (BPM):")
                 yield Select(
@@ -105,17 +99,7 @@ class BayesianMidiPerformer(App):
             return [("Error", "error")]
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.control.id == "input_port_selector":
-            self.start_midi_listener(str(event.value))
-        elif event.control.id == "output_port_selector":
-            if self.current_output_port:
-                self.current_output_port.close()
-            try:
-                self.current_output_port = mido.open_output(str(event.value))
-            except Exception as e:
-                self.call_from_thread(self.query_one("#input_log", RichLog).write, f"[red]Error: {e}[/]")
-
-        elif event.control.id == "bpm_selector":
+        if event.control.id == "bpm_selector":
             self.tempo_engine.set_bpm(int(event.value))
             self.query_one("#input_log", RichLog).write(f"[b]Tempo set to {event.value}[/]")
 
@@ -134,9 +118,10 @@ class BayesianMidiPerformer(App):
         while self.processing_active:
             if self.clock_running and self.tempo_engine.check_tick():
                 steps = self.tempo_engine.step_count
+                bar = self.tempo_engine.bar_count + 1
                 beat = ((steps // 4) % 4) + 1
                 sub = steps % 4
-                self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub)
+                self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub, bar)
                 # Network Logic
                 # Grab all notes that happened since the last tick
                 recent_events = self.midi_buffer[:]
@@ -145,6 +130,17 @@ class BayesianMidiPerformer(App):
                 self.process_bayesian_step(recent_events, beat, sub)
 
             time.sleep(0.002 if self.clock_running else 0.1)
+
+    def set_midi_output_port(self, port_name):
+        """Helper called by SettingsScreen to change output safely."""
+        if self.current_output_port:
+            self.current_output_port.close()
+        try:
+            # Persistent connection (no 'with' statement)
+            self.current_output_port = mido.open_output(port_name)
+            self.query_one("#output_log", RichLog).write(f"[green]Output connected: {port_name}[/]")
+        except Exception as e:
+            self.query_one("#output_log", RichLog).write(f"[red]Error connecting output: {e}[/]")
 
     @work(thread=True, exclusive=True)
     def start_midi_listener(self, port_name):

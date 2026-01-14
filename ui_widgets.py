@@ -13,11 +13,13 @@ class MetronomeDisplay(Vertical):
     CSS_PATH = "styles/widgets.tcss"
 
     def compose(self) -> ComposeResult:
+        yield Label("1", id="bar_digits")
         yield Digits("1", id="beat_digits")
 
-    def update_beat(self, beat, sub):
+    def update_beat(self, beat, sub, bar):
         # Update the Big Number
         self.query_one("#beat_digits", Digits).update(str(beat))
+        self.query_one("#bar_digits", Label).update(str(bar))
 
         # Highlight logic
         color = "grey"
@@ -30,3 +32,4 @@ class MetronomeDisplay(Vertical):
             self.styles.border = ("double", border_col)
         else:
             self.styles.border = ("solid", "green")
+
