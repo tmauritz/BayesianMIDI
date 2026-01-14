@@ -7,7 +7,8 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
 from textual import work
 
-from bayesian_network import BayesianInput, BayesianOutput, BayesianMusicGenerator, DrumType
+import bayesian.bayesian_network_ag_baked
+from bayesian.bayesian_network_helpers import DrumType, BayesianInput, BayesianOutput
 from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
 from tempo_engine import TempoEngine
@@ -26,7 +27,7 @@ class BayesianMidiPerformer(App):
         self.processing_active = True
         self.clock_running = False
         self.tempo_engine = TempoEngine(bpm=120)
-        self.bayesian_engine = BayesianMusicGenerator()
+        self.bayesian_engine = bayesian.bayesian_network_ag_baked.BakedBayesianGenerator()
         self.settings = PerformanceSettings()
         self.midi_buffer = []
 
@@ -129,7 +130,7 @@ class BayesianMidiPerformer(App):
 
                 self.process_bayesian_step(recent_events, beat, sub)
 
-            time.sleep(0.002 if self.clock_running else 0.1)
+            time.sleep(0.0001 if self.clock_running else 0.1)
 
     def set_midi_output_port(self, port_name):
         """Helper called by SettingsScreen to change output safely."""
@@ -164,10 +165,10 @@ class BayesianMidiPerformer(App):
                             # self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({str(note_type)})[/]")
                             self.call_from_thread(self.action_dispatch_midi, msg.note)
                             if self.clock_running:
-                                self.call_from_thread(self.app.midi_buffer.append, (note_type, msg.velocity))
+                                self.midi_buffer.append((note_type, msg.velocity))
                         # else:
                             # self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
-                    time.sleep(0.01) # sleep briefly to prevent high CPU usage
+                    time.sleep(0.0005) # sleep briefly (0.5ms) to prevent high CPU usage - but not too long or the system feels laggy
 
         except Exception as e:
             self.call_from_thread(self.query_one("#input_log", RichLog).write, f"[red]Error: {e}[/]")
@@ -177,7 +178,6 @@ class BayesianMidiPerformer(App):
         if self.current_input_port: self.current_input_port.close()
         if self.current_output_port: self.current_output_port.close()
 
-    @work(thread=True)
     def process_bayesian_step(self, recent_events, beat, sub):
         """
         Called by the metronome every 16th note.

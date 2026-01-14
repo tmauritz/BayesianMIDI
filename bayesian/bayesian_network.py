@@ -1,73 +1,9 @@
 import random
-from dataclasses import dataclass
-from enum import IntEnum
 
-
-# ==========================================
-# 1. OPTIMIZED TYPES (IntEnum)
-# ==========================================
-# IntEnum compares as fast as raw integers (O(1))
-class DrumType(IntEnum):
-    NONE = 0
-    KICK = 1
-    SNARE = 2
-    RIM = 3
-
-
-class DensityLevel(IntEnum):
-    SPARSE = 0
-    MEDIUM = 1
-    BUSY = 2
-
-
-class EnergyLevel(IntEnum):
-    CHILL = 0
-    GROOVE = 1
-    HIGH = 2
-
-
-class ChordType(IntEnum):
-    I = 1
-    IV = 4
-    V = 5
-    VI = 6
-
-
-class BeatType(IntEnum):
-    DOWNBEAT = 0
-    OFFBEAT = 1
-    SUBDIVISION = 2
-
-
-class PitchFunc(IntEnum):
-    ROOT = 0
-    THIRD_FIFTH = 1
-    COLOR = 2
-
-
-@dataclass
-class BayesianInput:
-    drum_type: DrumType
-    velocity: int
-    bar: int
-    step: int
-
-
-@dataclass
-class BayesianOutput:
-    should_play: bool
-    midi_note: int
-    velocity: int
-    duration: float
-    channel: int
-    debug_info: str
-
+from bayesian.bayesian_network_helpers import *
 
 class BayesianMusicGenerator:
     def __init__(self):
-        # ==========================================
-        # 2. PRE-CALCULATED LOOKUP TABLES (O(1))
-        # ==========================================
         # We pre-split data into ([Choices], [Weights]) tuples.
         # This prevents creating lists inside the real-time loop.
 
@@ -141,11 +77,7 @@ class BayesianMusicGenerator:
                                                               0.20))  # Using 'Downbeat' to proxy 'Any' for now
 
     def infer(self, data: BayesianInput) -> BayesianOutput:
-        """
-        Optimized inference: Direct lookups, no string hashing, no list creation.
-        """
         # --- PRE-CALCULATIONS ---
-        # Integer math is faster than list lookups
         is_downbeat = (data.step % 4 == 1)  # 1, 5, 9, 13
         is_offbeat = (data.step % 2 == 1) and not is_downbeat
 
@@ -158,10 +90,9 @@ class BayesianMusicGenerator:
 
         is_loud = 1 if data.velocity > 90 else 0
 
-        # --- STEP 1: LATENT VARIABLES (O(1) Lookups) ---
+        # --- STEP 1: LATENT VARIABLES  ---
 
         # 1. Density
-        # Direct tuple lookup - no loop!
         d_choices, d_weights = self._density_map.get((data.bar, data.drum_type),
                                                      ([DensityLevel.MEDIUM], [1.0]))
         current_density = random.choices(d_choices, weights=d_weights)[0]

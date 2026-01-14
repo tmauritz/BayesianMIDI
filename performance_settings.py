@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from bayesian_network import DrumType
+from bayesian.bayesian_network import DrumType
 
 
 @dataclass
@@ -16,7 +16,7 @@ class PerformanceSettings:
         or None if the note is not mapped.
         """
 
-        #TODO: is there a more elegant way?
+        #TODO: is there a more elegant way to map?
         if note == self.kick_note:
             return DrumType.KICK
         if note == self.snare_note:
