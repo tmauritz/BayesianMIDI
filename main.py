@@ -1,6 +1,9 @@
 import mido
 import time
 from datetime import datetime
+
+from aiohttp_jinja2 import render_string
+from mido import Message
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Button
@@ -20,7 +23,8 @@ class BayesianMidiPerformer(App):
 
     def __init__(self):
         super().__init__()
-        self.current_port = None
+        self.current_input_port = None
+        self.current_output_port = None
         self.processing_active = True
         self.clock_running = False
         self.tempo_engine = TempoEngine(bpm=120)
@@ -35,7 +39,9 @@ class BayesianMidiPerformer(App):
             # LEFT: Sidebar
             with Vertical(id="sidebar"):
                 yield Label("MIDI Input:")
-                yield Select(options=self.get_midi_ports(), id="port_selector")
+                yield Select(options=self.get_midi_input_ports(), id="input_port_selector")
+                yield Label("MIDI Output:")
+                yield Select(options=self.get_midi_output_ports(), id="output_port_selector")
 
                 yield Label("\nTempo (BPM):")
                 yield Select(
@@ -84,16 +90,31 @@ class BayesianMidiPerformer(App):
         if hasattr(self.screen, "handle_midi_input"):
             self.screen.handle_midi_input(note)
 
-    def get_midi_ports(self):
+    def get_midi_input_ports(self):
         try:
             inputs = mido.get_input_names()
             return [(name, name) for name in inputs] if inputs else [("No Ports", "none")]
         except:
             return [("Error", "error")]
 
+    def get_midi_output_ports(self):
+        try:
+            outputs = mido.get_output_names()
+            return [(name, name) for name in outputs] if outputs else [("No Ports", "none")]
+        except:
+            return [("Error", "error")]
+
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.control.id == "port_selector":
+        if event.control.id == "input_port_selector":
             self.start_midi_listener(str(event.value))
+        elif event.control.id == "output_port_selector":
+            if self.current_output_port:
+                self.current_output_port.close()
+            try:
+                self.current_output_port = mido.open_output(str(event.value))
+            except Exception as e:
+                self.call_from_thread(self.query_one("#input_log", RichLog).write, f"[red]Error: {e}[/]")
+
         elif event.control.id == "bpm_selector":
             self.tempo_engine.set_bpm(int(event.value))
             self.query_one("#input_log", RichLog).write(f"[b]Tempo set to {event.value}[/]")
@@ -129,12 +150,12 @@ class BayesianMidiPerformer(App):
     def start_midi_listener(self, port_name):
         self.call_from_thread(self.query_one("#status_label", Static).update, f"[green]Listening:\n{port_name}[/]")
 
-        if self.current_port:
-            self.current_port.close()
+        if self.current_input_port:
+            self.current_input_port.close()
 
         try:
             with mido.open_input(port_name) as port:
-                self.current_port = port
+                self.current_input_port = port
 
                 # non-blocking loop
                 while self.processing_active:
@@ -157,7 +178,8 @@ class BayesianMidiPerformer(App):
 
     def on_unmount(self):
         self.processing_active = False
-        if self.current_port: self.current_port.close()
+        if self.current_input_port: self.current_input_port.close()
+        if self.current_output_port: self.current_output_port.close()
 
     @work(thread=True)
     def process_bayesian_step(self, recent_events, beat, sub):
@@ -194,6 +216,26 @@ class BayesianMidiPerformer(App):
         # 4. INFER & ACT
         result = self.bayesian_engine.infer(evidence)
         self.call_from_thread(self.log_generation, result)
+        if result.should_play is not True:
+            return
+
+        if self.current_output_port:
+            msg_on = mido.Message('note_on', channel = result.channel, note=result.midi_note,  velocity=result.velocity)
+            msg_off = mido.Message('note_off', channel = result.channel, note=result.midi_note, velocity=result.velocity)
+            self.play_note(msg_on, msg_off, result.duration)
+        else:
+            self.call_from_thread(self.log_error, "No Output selected!")
+
+    @work(thread=True)
+    def play_note(self, msg_note_on: mido.Message, msg_note_off: mido.Message, output_duration):
+        """
+        Sends a note on and off. delays the note off for time in seconds.
+        """
+        if not self.current_output_port:
+            return
+        self.current_output_port.send(msg_note_on)
+        time.sleep(output_duration)
+        self.current_output_port.send(msg_note_off)
 
     def log_generation(self, result: BayesianOutput) -> None:
         """
@@ -218,6 +260,25 @@ class BayesianMidiPerformer(App):
             return
 
         log_widget.write(message)
+
+    def log_error(self, error_message: str) -> None:
+        """
+        Updates the Output Log with an error message.
+        Must be called via self.call_from_thread if used in a worker.
+        """
+        log_widget = self.query_one("#output_log", RichLog)
+
+        # Get current timestamp
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Format: [12:00:01] ERROR my error message
+        # We use [bold red] to make the error stand out
+        formatted_message = (
+            f"[{timestamp}] [bold red]ERROR[/] "
+            f"{error_message}"
+        )
+
+        log_widget.write(formatted_message)
 
 if __name__ == "__main__":
     app = BayesianMidiPerformer()

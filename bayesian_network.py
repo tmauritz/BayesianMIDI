@@ -56,7 +56,7 @@ class BayesianInput:
 @dataclass
 class BayesianOutput:
     should_play: bool
-    midi_note: int | None
+    midi_note: int
     velocity: int
     duration: float
     channel: int
@@ -188,7 +188,7 @@ class BayesianMusicGenerator:
 
         if not should_play:
             # Quick exit
-            return BayesianOutput(False, None, 0, 0, 0, "Rest")
+            return BayesianOutput(False, 0, 0, 0, 0, "Rest")
 
         # 5. Pitch Function
         p_key = (current_chord, beat_type)
