@@ -8,6 +8,7 @@ from textual.widgets import Header, Footer, Static, RichLog, Select, Label, Butt
 from textual import work
 
 import bayesian.bayesian_network_ag_baked
+from MidiScheduler import MidiScheduler
 from bayesian.bayesian_network_helpers import DrumType, BayesianInput, BayesianOutput
 from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
@@ -31,6 +32,7 @@ class BayesianMidiPerformer(App):
         self.bayesian_engine = bayesian.bayesian_network_ag_baked.BakedBayesianGenerator()
         self.settings = PerformanceSettings()
         self.midi_buffer = []
+        self.midi_scheduler = MidiScheduler()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -138,8 +140,8 @@ class BayesianMidiPerformer(App):
         if self.current_output_port:
             self.current_output_port.close()
         try:
-            # Persistent connection (no 'with' statement)
             self.current_output_port = mido.open_output(port_name)
+            self.midi_scheduler.set_port(self.current_output_port)
             self.query_one("#output_log", RichLog).write(f"[green]Output connected: {port_name}[/]")
         except Exception as e:
             self.query_one("#output_log", RichLog).write(f"[red]Error connecting output: {e}[/]")
@@ -212,22 +214,14 @@ class BayesianMidiPerformer(App):
             return
 
         if self.current_output_port:
-            msg_on = mido.Message('note_on', channel = result.channel, note=result.midi_note,  velocity=result.velocity)
-            msg_off = mido.Message('note_off', channel = result.channel, note=result.midi_note, velocity=result.velocity)
-            self.play_note(msg_on, msg_off, result.duration)
+            self.midi_scheduler.play_note(
+                note=result.midi_note,
+                velocity=result.velocity,
+                channel=result.channel,
+                duration=result.duration
+            )
         else:
             self.call_from_thread(self.log_error, "No Output selected!")
-
-    @work(thread=True)
-    def play_note(self, msg_note_on: mido.Message, msg_note_off: mido.Message, output_duration):
-        """
-        Sends a note on and off. delays the note off for time in seconds.
-        """
-        if not self.current_output_port:
-            return
-        self.current_output_port.send(msg_note_on)
-        time.sleep(output_duration)
-        self.current_output_port.send(msg_note_off)
 
     def log_generation(self, result: BayesianOutput) -> None:
         """
