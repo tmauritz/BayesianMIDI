@@ -22,6 +22,7 @@ class BayesianMidiPerformer(App):
 
     def __init__(self):
         super().__init__()
+        mido.set_backend('mido.backends.rtmidi')
         self.current_input_port = None
         self.current_output_port = None
         self.processing_active = True
@@ -143,35 +144,30 @@ class BayesianMidiPerformer(App):
         except Exception as e:
             self.query_one("#output_log", RichLog).write(f"[red]Error connecting output: {e}[/]")
 
-    @work(thread=True, exclusive=True)
     def start_midi_listener(self, port_name):
-        self.call_from_thread(self.query_one("#status_label", Static).update, f"[green]Listening:\n{port_name}[/]")
+        self.query_one("#status_label", Static).update(f"[green]Listening:\n{port_name}[/]")
 
         if self.current_input_port:
             self.current_input_port.close()
-
         try:
-            with mido.open_input(port_name) as port:
-                self.current_input_port = port
-
-                # non-blocking loop
-                while self.processing_active:
-                    for msg in port.iter_pending():
-                        timestamp = datetime.now().strftime("%H:%M:%S")
-                        log_target = self.query_one("#input_log", RichLog)
-                        note_type = self.app.settings.identify(msg.note)
-
-                        if msg.type == 'note_on':
-                            # self.call_from_thread(log_target.write, f"[green]{timestamp} NOTE {msg.note} ({str(note_type)})[/]")
-                            self.call_from_thread(self.action_dispatch_midi, msg.note)
-                            if self.clock_running:
-                                self.midi_buffer.append((note_type, msg.velocity))
-                        # else:
-                            # self.call_from_thread(log_target.write, f"[dim]{timestamp} {msg}[/]")
-                    time.sleep(0.0005) # sleep briefly (0.5ms) to prevent high CPU usage - but not too long or the system feels laggy
-
+            self.current_input_port = mido.open_input(port_name, callback=self.on_midi_message)
         except Exception as e:
-            self.call_from_thread(self.query_one("#input_log", RichLog).write, f"[red]Error: {e}[/]")
+            self.query_one("#input_log", RichLog).write(f"[red]Error: {e}[/]")
+
+    def on_midi_message(self, msg):
+        """
+        This runs on the high-priority RtMidi thread.
+        Keep this function FAST. No sleeps, no complex logs.
+        """
+        if msg.type == 'note_on':
+            # 1. Update UI (Thread-safe call required)
+            self.app.call_from_thread(self.action_dispatch_midi, msg.note)
+
+            # 2. Add to Buffer for Bayesian Engine
+            # List.append is thread-safe in Python (GIL protects atomic operations)
+            if self.clock_running:
+                note_type = self.app.settings.identify(msg.note)
+                self.app.midi_buffer.append((note_type, msg.velocity))
 
     def on_unmount(self):
         self.processing_active = False
