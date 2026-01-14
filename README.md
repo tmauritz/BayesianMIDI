@@ -92,7 +92,3 @@ The Bayesian Engine analyzes these inputs to infer:
 * **"Error" on Port Selection:** Ensure your MIDI device is connected *before* starting the script. If using `python-rtmidi` on Windows, ensure you have the necessary C++ build tools installed.
 * **Audio Latency:** If the audio feels delayed, check the buffer size of your DAW or audio interface. The `MidiScheduler` is designed to send MIDI messages instantly upon decision.
 * **Visual Lag:** The TUI updates via `call_from_thread` and might appear slightly behind the audio; this is intentional to prioritize audio timing over visual redraws.
-
-```
-
-```
