@@ -1,4 +1,4 @@
-import pyAgrum as gum
+import pyagrum as gum
 import random
 from bayesian.bayesian_network_helpers import *
 

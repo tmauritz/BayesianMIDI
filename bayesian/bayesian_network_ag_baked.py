@@ -1,5 +1,5 @@
 import random
-import pyAgrum as gum
+import pyagrum as gum
 
 from bayesian.bayesian_network_ag import BayesianMusicGeneratorAg
 from bayesian.bayesian_network_helpers import *
