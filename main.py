@@ -33,6 +33,8 @@ class BayesianMidiPerformer(App):
         self.settings = PerformanceSettings()
         self.midi_buffer = []
         self.midi_scheduler = MidiScheduler()
+        self.last_beat_state = None
+        self.output_log_buffer = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -62,7 +64,7 @@ class BayesianMidiPerformer(App):
                 yield RichLog(id="input_log", highlight=True, markup=True)
 
                 yield Label("Generated Output")
-                yield RichLog(id="output_log", highlight=True, markup=True)
+                yield RichLog(id="output_log", highlight=False, markup=False)
 
         yield Footer()
 
@@ -125,15 +127,22 @@ class BayesianMidiPerformer(App):
                 bar = self.tempo_engine.bar_count + 1
                 beat = ((steps // 4) % 4) + 1
                 sub = steps % 4
-                self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub, bar)
+
+                # update GUI only if beat changes
+                current_beat_state = (beat, sub, bar)
+
+                if current_beat_state != self.last_beat_state:
+                    self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub, bar)
+                    self.last_beat_state = current_beat_state
+                    #self.flush_logs()
+
                 # Network Logic
                 # Grab all notes that happened since the last tick
                 recent_events = self.midi_buffer[:]
                 self.midi_buffer.clear()  # Reset for next tick
-
                 self.process_bayesian_step(recent_events, beat, sub)
 
-            time.sleep(0.0001 if self.clock_running else 0.1)
+            time.sleep(0.001 if self.clock_running else 0.1)
 
     def set_midi_output_port(self, port_name):
         """Helper called by SettingsScreen to change output safely."""
@@ -209,7 +218,7 @@ class BayesianMidiPerformer(App):
 
         # 4. INFER & ACT
         result = self.bayesian_engine.infer(evidence)
-        self.call_from_thread(self.log_generation, result)
+        # self.call_from_thread(self.log_generation, result)
         if result.should_play is not True:
             return
 
@@ -236,16 +245,29 @@ class BayesianMidiPerformer(App):
         if result.should_play:
             # Format: [12:00:01] Kick -> I (Root) -> Note 60
             message = (
-                f"[{timestamp}] [bold green]PLAY[/] "
+                f"[{timestamp}] PLAY "
                 f"Note: {result.midi_note} (Vel: {result.velocity}) | "
-                f"[dim]{result.debug_info}[/]"
+                f"{result.debug_info}"
             )
         else:
             # Optional: Log 'Rest' decisions if you want to see the engine thinking
             # message = f"[{timestamp}] [dim]... Rest ({result.debug_info})[/]"
             return
 
-        log_widget.write(message)
+        self.output_log_buffer.append(message)
+
+    def flush_logs(self):
+        # This runs on the Main Thread automatically via set_interval
+        if self.output_log_buffer:
+            log_widget = self.query_one("#output_log", RichLog)
+
+            # Join all pending messages into one write operation
+            # This triggers only ONE layout calculation instead of N
+            batch_message = "\n".join(self.output_log_buffer)
+            log_widget.write(batch_message)
+
+            # Clear the queue
+            self.output_log_buffer.clear()
 
     def log_error(self, error_message: str) -> None:
         """
