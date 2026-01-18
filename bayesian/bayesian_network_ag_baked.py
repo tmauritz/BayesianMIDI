@@ -134,7 +134,7 @@ class BakedBayesianGenerator:
         if final_velocity > 127: final_velocity = 127
 
         # Pitch Math
-        final_pitch = self._resolve_pitch(current_chord, pf_val)
+        final_pitch = self._resolve_pitch(current_chord, pf_val, final_channel)
 
         return BayesianOutput(
             should_play=True,
@@ -145,8 +145,9 @@ class BakedBayesianGenerator:
             debug_info=f"{current_chord.name} -> {pf_val.name} (Baked)"
         )
 
-    def _resolve_pitch(self, chord: ChordType, func: PitchFunc) -> int:
-        """Helper for pitch arithmetic (Same as before)"""
+    def _resolve_pitch(self, chord: ChordType, func: PitchFunc, channel: int) -> int:
+
+        # 1. Determine Root Offset based on Chord
         root_offset = 0
         if chord == ChordType.IV:
             root_offset = 5
@@ -155,6 +156,7 @@ class BakedBayesianGenerator:
         elif chord == ChordType.VI:
             root_offset = 9
 
+        # 2. Determine Interval based on Pitch Function
         interval = 0
         if func == PitchFunc.THIRD_FIFTH:
             interval = 4 if random.random() < 0.5 else 7
@@ -167,4 +169,18 @@ class BakedBayesianGenerator:
             else:
                 interval = 14
 
-        return 60 + root_offset + interval
+        # 3. Calculate Base Pitch (Middle C approx)
+        base_pitch = 60 + root_offset + interval
+
+        # 4. Apply Channel Transposition
+        # Channel 1 (Bass) -> Down 2 octave (-24)
+        # Channel 2 (Mid) -> Down 1 octave
+        # Channel 3 (Lead) -> Up 2 octaves (+24)
+        if channel == 1:
+            base_pitch -= 24
+        elif channel == 2:
+            base_pitch -= 12
+        elif channel == 3:
+            base_pitch += 24
+
+        return base_pitch

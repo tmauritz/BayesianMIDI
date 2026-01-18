@@ -204,7 +204,7 @@ class BayesianMusicGeneratorAg:
         final_velocity = int(data.velocity * energy_mult)
         if final_velocity > 127: final_velocity = 127
 
-        final_pitch = self._resolve_pitch(current_chord, pf_val)
+        final_pitch = self._resolve_pitch(current_chord, pf_val, final_channel)
 
         return BayesianOutput(
             should_play=True,
@@ -215,7 +215,9 @@ class BayesianMusicGeneratorAg:
             debug_info=f"{current_chord.name} -> {pf_val.name}"
         )
 
-    def _resolve_pitch(self, chord: ChordType, func: PitchFunc) -> int:
+    def _resolve_pitch(self, chord: ChordType, func: PitchFunc, channel: int) -> int:
+
+        # 1. Determine Root Offset based on Chord
         root_offset = 0
         if chord == ChordType.IV:
             root_offset = 5
@@ -224,6 +226,7 @@ class BayesianMusicGeneratorAg:
         elif chord == ChordType.VI:
             root_offset = 9
 
+        # 2. Determine Interval based on Pitch Function
         interval = 0
         if func == PitchFunc.THIRD_FIFTH:
             interval = 4 if random.random() < 0.5 else 7
@@ -236,4 +239,15 @@ class BayesianMusicGeneratorAg:
             else:
                 interval = 14
 
-        return 60 + root_offset + interval
+        # 3. Calculate Base Pitch (Middle C approx)
+        base_pitch = 60 + root_offset + interval
+
+        # 4. Apply Channel Transposition
+        # Channel 1 (Bass) -> Down 1 octave (-12)
+        # Channel 3 (Lead) -> Up 1 octave (+12)
+        if channel == 1:
+            base_pitch -= 12
+        elif channel == 3:
+            base_pitch += 12
+
+        return base_pitch
