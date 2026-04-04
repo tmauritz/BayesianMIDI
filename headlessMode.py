@@ -10,10 +10,11 @@ from bayesian.bayesian_network_helpers import DrumType, BayesianInput
 from performance_settings import PerformanceSettings
 import bayesian.bayesian_network_ag_baked
 
+GRACE_PERIOD_MS = 15
 
 class HeadlessBayesianPerformer:
     def __init__(self, input_name, output_name):
-        print(f"\n--- Initializing Headless Performer ---")
+        print(f"\n--- Initializing Headless Performer (Grace: {GRACE_PERIOD_MS}ms) ---")
 
         # 1. Thread-Safe Communication
         self.work_queue = queue.Queue()
@@ -89,46 +90,50 @@ class HeadlessBayesianPerformer:
         # --- Timing Pulses (24 PPQN) ---
         if msg.type == 'clock' and self.clock_running:
             self.clock_tick_count += 1
-
-            # 6 ticks = 1 sixteenth note
             if self.clock_tick_count >= 6:
                 self.clock_tick_count = 0
 
-                # Backlog Protection:
-                # If the Brain is > 2 steps behind, drop this step to maintain sync.
-                #if self.work_queue.qsize() > 2:
-                #    self.midi_buffer.clear()
-                #    self.step_count += 1
-                #    return
+                # 1. RECORD EXACT TRIGGER TIME
+                trigger_time = time.perf_counter()
 
-                # Calculate musical position
+                # 2. Package everything for the Brain
                 bar = (self.step_count // 16) % 4
                 beat = ((self.step_count // 4) % 4) + 1
-                sub = self.step_count % 41
+                sub = self.step_count % 4
 
-                # Snapshot notes and move to Brain Worker
-                snapshot = self.midi_buffer[:]
-                self.midi_buffer.clear()
-                self.work_queue.put(('step', snapshot, bar, beat, sub))
-
+                self.work_queue.put(('beat', trigger_time, bar, beat, sub))
                 self.step_count += 1
 
-        # --- Note Input ---
         elif msg.type == 'note_on' and msg.velocity > 0:
             if self.clock_running:
-                # Classify the hit (Kick, Snare, etc.)
-                d_type = self.settings.identify(msg.note)
-                self.midi_buffer.append((d_type, msg.velocity))
+                self.midi_buffer.append((self.settings.identify(msg.note), msg.velocity))
 
     def brain_worker(self):
-        """The 'Brain' thread loop. Pulls from the queue and runs inference."""
+        """Brain Thread: Monitors Jitter and Inference."""
         while self.processing_active:
             try:
-                # Timeout allows the loop to check self.processing_active periodically
                 task = self.work_queue.get(timeout=0.5)
-                if task[0] == 'step':
-                    _, events, bar, beat, sub = task
-                    self.process_step(events, bar, beat, sub)
+                if task[0] == 'beat':
+                    _, trigger_time, bar, beat, sub = task
+
+                    # 1. Wait for Grace Period
+                    if GRACE_PERIOD_MS > 0:
+                        time.sleep(GRACE_PERIOD_MS / 1000.0)
+
+                    # 2. Calculate Wake Jitter
+                    # (Actual Time - Trigger Time) - Intended Delay
+                    # actual_wake_time = time.perf_counter()
+                    # total_delay_ms = (actual_wake_time - trigger_time) * 1000
+                    # jitter_ms = total_delay_ms - GRACE_PERIOD_MS
+
+                    # 3. Snapshot and Process
+                    snapshot = self.midi_buffer[:]
+                    self.midi_buffer.clear()
+
+                    self.process_step(snapshot, bar, beat, sub)
+                    # end_time = time.perf_counter()
+                    # duration_ms = (end_time - trigger_time) * 1000
+                    # print(f"Total Time: {duration_ms}ms, Jitter {jitter_ms}ms")
             except queue.Empty:
                 continue
 
