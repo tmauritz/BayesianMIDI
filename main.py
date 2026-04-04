@@ -1,3 +1,6 @@
+import queue
+from math import floor
+
 import mido
 import time
 from datetime import datetime
@@ -12,7 +15,6 @@ from MidiScheduler import MidiScheduler
 from bayesian.bayesian_network_helpers import DrumType, BayesianInput, BayesianOutput
 from performance_settings import PerformanceSettings
 from SettingsModal import SettingsScreen
-from tempo_engine import TempoEngine
 from ui_widgets import MetronomeDisplay
 
 
@@ -21,14 +23,18 @@ class BayesianMidiPerformer(App):
     CSS_PATH = ["styles/app.tcss", "styles/widgets.tcss", "styles/settings.tcss"]
     BINDINGS = [("space", "toggle_play", "Start/Stop")]
 
+
     def __init__(self):
         super().__init__()
+        self.work_queue = queue.Queue()
+
+        self.clock_tick_count = 0
+        self.step_count = 0
         mido.set_backend('mido.backends.rtmidi')
         self.current_input_port = None
         self.current_output_port = None
         self.processing_active = True
         self.clock_running = False
-        self.tempo_engine = TempoEngine(bpm=120)
         self.bayesian_engine = bayesian.bayesian_network_ag_baked.BakedBayesianGenerator()
         self.settings = PerformanceSettings()
         self.midi_buffer = []
@@ -42,14 +48,6 @@ class BayesianMidiPerformer(App):
         with Horizontal(id="main_area"):
             # LEFT: Sidebar
             with Vertical(id="sidebar"):
-
-                yield Label("\nTempo (BPM):")
-                yield Select(
-                    options=[("80", 80), ("100", 100), ("120", 120), ("140", 140)],
-                    value=120,
-                    id="bpm_selector",
-                    allow_blank=False
-                )
 
                 yield Button("Settings", id="open_settings_btn", variant="primary")
                 yield Button("START", id="toggle_clock", variant="success")
@@ -75,7 +73,6 @@ class BayesianMidiPerformer(App):
 
         if self.clock_running:
             btn.label, btn.variant = "STOP", "error"
-            self.tempo_engine.reset()
             self.query_one("#output_log", RichLog).write("[bold green]▶ Performance Started[/]")
         else:
             btn.label, btn.variant = "START", "success"
@@ -104,11 +101,6 @@ class BayesianMidiPerformer(App):
         except:
             return [("Error", "error")]
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if event.control.id == "bpm_selector":
-            self.tempo_engine.set_bpm(int(event.value))
-            self.query_one("#input_log", RichLog).write(f"[b]Tempo set to {event.value}[/]")
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "toggle_clock":
             self.action_toggle_play()
@@ -116,33 +108,29 @@ class BayesianMidiPerformer(App):
             # Push the screen onto the stack
             self.push_screen(SettingsScreen())
 
-    def on_mount(self):
-        self.run_clock()
-
-    @work(thread=True, exclusive=True)
-    def run_clock(self):
+    @work(exclusive=True, thread=True)
+    def brain_worker(self) -> None:
+        """The dedicated thread for Bayesian Inference."""
         while self.processing_active:
-            if self.clock_running and self.tempo_engine.check_tick():
-                steps = self.tempo_engine.step_count
-                bar = self.tempo_engine.bar_count + 1
-                beat = ((steps // 4) % 4) + 1
-                sub = steps % 4
+            try:
+                # Wait for data from the MIDI thread (blocks for 100ms max)
+                task_data = self.work_queue.get(timeout=0.1)
 
-                # update GUI only if beat changes
-                current_beat_state = (beat, sub, bar)
+                if task_data[0] == 'process_step':
+                    _, events, bar, beat, sub = task_data
+                    self.process_bayesian_step(events, bar, beat, sub)
 
-                if current_beat_state != self.last_beat_state:
-                    self.call_from_thread(self.query_one("#metronome_box", MetronomeDisplay).update_beat, beat, sub, bar)
-                    self.last_beat_state = current_beat_state
-                    #self.flush_logs()
+            except queue.Empty:
 
-                # Network Logic
-                # Grab all notes that happened since the last tick
-                recent_events = self.midi_buffer[:]
-                self.midi_buffer.clear()  # Reset for next tick
-                self.process_bayesian_step(recent_events, beat, sub)
+                continue
 
-            time.sleep(0.001 if self.clock_running else 0.1)
+    def on_mount(self) -> None:
+        """Called when the app is first mounted."""
+        # This tells Textual: "Run self.flush_logs every 0.1 seconds"
+        self.set_interval(0.1, self.flush_logs)
+        self.brain_worker()
+        # Optional: Start with a clean log
+        self.query_one("#input_log", RichLog).write("[bold cyan]System Ready. Waiting for MIDI...[/]")
 
     def set_midi_output_port(self, port_name):
         """Helper called by SettingsScreen to change output safely."""
@@ -156,42 +144,86 @@ class BayesianMidiPerformer(App):
             self.query_one("#output_log", RichLog).write(f"[red]Error connecting output: {e}[/]")
 
     def start_midi_listener(self, port_name):
-        self.query_one("#status_label", Static).update(f"[green]Listening:\n{port_name}[/]")
+        self.query_one("#status_label", Static).update(
+            f"[green]Listening:\n{port_name} (Current Backend: {mido.backend.name})[/]"
+        )
 
         if self.current_input_port:
             self.current_input_port.close()
+
         try:
+            # 1. Open with callback
             self.current_input_port = mido.open_input(port_name, callback=self.on_midi_message)
+
+            # 2. UNBLOCK CLOCK: Reach into the backend to disable filters
+            # We look for '_rt' (standard) or 'callback_port' (some mido versions)
+            backend = getattr(self.current_input_port, '_rt',
+                              getattr(self.current_input_port, 'callback_port', None))
+
+            if backend:
+                # timing=False -> DO NOT ignore clock/start/stop
+                # active_sense=True -> DO ignore the clutter heartbeat
+                backend.ignore_types(timing=False, sysex=False, active_sense=True)
+                self.query_one("#input_log", RichLog).write("[cyan]MIDI Clock Unblocked[/]")
+
         except Exception as e:
             self.query_one("#input_log", RichLog).write(f"[red]Error: {e}[/]")
 
     def on_midi_message(self, msg):
         """
-        This runs on the high-priority RtMidi thread.
-        Keep this function FAST. No sleeps, no complex logs.
+        Runs on high-priority thread.
         """
-        if msg.type == 'note_on':
-            # 1. Update UI (Thread-safe call required)
-            self.app.call_from_thread(self.action_dispatch_midi, msg.note)
+        # --- 1. Transport ---
+        if msg.type == 'start' or msg.type == 'continue':
+            self.clock_running = True
+            self.clock_tick_count = 0
+            self.step_count = 0
+            self.midi_buffer.clear()
+            return
 
-            # 2. Add to Buffer for Bayesian Engine
-            # List.append is thread-safe in Python (GIL protects atomic operations)
+        elif msg.type == 'stop':
+            self.clock_running = False
+            return
+
+        # --- 2. Clock Pulses ---
+        elif msg.type == 'clock':
             if self.clock_running:
-                note_type = self.app.settings.identify(msg.note)
-                self.app.midi_buffer.append((note_type, msg.velocity))
+                self.clock_tick_count += 1
+
+                if self.clock_tick_count >= 6:
+                    self.clock_tick_count = 0
+
+                    # Bundle the data and put it in the queue for the Brain
+                    beat = ((self.step_count // 4) % 4) + 1
+                    sub = self.step_count % 4
+                    bar = self.step_count // 16
+
+                    # Snapshot the buffer and send to worker
+                    self.work_queue.put(('process_step', self.midi_buffer[:], bar, beat, sub))
+                    self.midi_buffer.clear()
+                    self.step_count += 1
+            return
+
+        # --- 3. Note Input ---
+        elif msg.type == 'note_on' and msg.velocity > 0:
+            # UI Update (Only for notes!)
+            self.call_from_thread(self.action_dispatch_midi, msg.note)
+
+            if self.clock_running:
+                note_type = self.settings.identify(msg.note)
+                self.midi_buffer.append((note_type, msg.velocity))
 
     def on_unmount(self):
         self.processing_active = False
         if self.current_input_port: self.current_input_port.close()
         if self.current_output_port: self.current_output_port.close()
 
-    def process_bayesian_step(self, recent_events, beat, sub):
+    def process_bayesian_step(self, recent_events, bar, beat, sub):
         """
         Called by the metronome every 16th note.
         2. Updates Bayesian State (Density/Energy).
         3. Infers output.
         """
-
         # 2. DETERMINE DOMINANT INPUT
         # If the drummer played a Kick AND a Snare, which one wins?
         # Logic: Kicks take priority for downbeats, otherwise take the loudest.
@@ -212,15 +244,15 @@ class BayesianMidiPerformer(App):
         evidence = BayesianInput(
             drum_type=dominant_drum,
             velocity=max_velocity,
-            bar=self.tempo_engine.bar_count,
+            bar=bar,
             step=current_step
         )
 
         # 4. INFER & ACT
         result = self.bayesian_engine.infer(evidence)
-        # self.call_from_thread(self.log_generation, result)
         if result.should_play is not True:
             return
+        # self.call_from_thread(self.log_generation, result)
 
         if self.current_output_port:
             self.midi_scheduler.play_note(
