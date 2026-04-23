@@ -1,4 +1,5 @@
 import os
+import random
 import time
 from datetime import datetime
 
@@ -273,18 +274,16 @@ class DynamicBayesianNetwork:
         # We create a temporary dictionary for this tick's results
         current_results = {}
         for key in ["Momentum", "Anchor", "Tension", "Density", "Velocity"]:
-            node_name = f"Current_{key}"
-            node_id = self.ids[node_name]
+            node_id = self.ids[f"Current_{key}"]
+            dist = self.ie.posterior(node_id).tolist()  # Get the list of probabilities
 
-            # argmax()[0] returns the Instantiation (the winning state)
-            # inst[node_name] retrieves the integer index of that state
-            winning_inst = self.ie.posterior(node_id).argmax()[0][0]
-            current_index = winning_inst[node_name]
+            # Sample one index based on the weights
+            # This prevents the "stuck at 0.55" problem
+            states = list(range(len(dist)))
+            chosen_index = random.choices(states, weights=dist)[0]
 
-            # Store the integer index in our "Past" memory for the next tick
-            self.memory[f"Past_{key}"] = int(current_index)
-            # Keep a local copy for the print statement
-            current_results[key] = int(current_index)
+            self.memory[f"Past_{key}"] = chosen_index
+            current_results[key] = int(chosen_index)
 
         # 3. Calculate Latency
         inference_ms = (time.perf_counter() - start_time) * 1000
