@@ -132,105 +132,60 @@ class DynamicBayesianNetwork:
         # Now we apply your specific musical logic overrides
         # --- 1. CURRENT DENSITY ---
         # Parents: Past_Density, Input_Density
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.LOW)}] = [0.95,
-                                                                                                                 0.05,
-                                                                                                                 0.00]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.MEDIUM)}] = [
-            0.30, 0.65, 0.05]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.HIGH)}] = [0.10,
-                                                                                                                  0.40,
-                                                                                                                  0.50]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.LOW)}] = [
-            0.40, 0.55, 0.05]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.MEDIUM)}] = [
-            0.10, 0.80, 0.10]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.HIGH)}] = [
-            0.00, 0.30, 0.70]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.LOW)}] = [0.15,
-                                                                                                                  0.65,
-                                                                                                                  0.20]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.MEDIUM)}] = [
-            0.05, 0.35, 0.60]
-        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.HIGH)}] = [0.00,
-                                                                                                                   0.05,
-                                                                                                                   0.95]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.LOW)}] = [0.95, 0.05, 0.00]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.MEDIUM)}] = [0.30, 0.65, 0.05]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.HIGH)}] = [0.10, 0.40, 0.50]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.LOW)}] = [0.60, 0.35, 0.05]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.MEDIUM)}] = [0.10, 0.80, 0.10]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.MEDIUM), 'Input_Density': int(Density.HIGH)}] = [0.00, 0.30, 0.70]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.LOW)}] = [0.15, 0.65, 0.20]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.MEDIUM)}] = [0.05, 0.35, 0.60]
+        self.bn.cpt("Current_Density")[{'Past_Density': int(Density.HIGH), 'Input_Density': int(Density.HIGH)}] = [0.00, 0.05, 0.95]
 
         # --- 2. CURRENT VELOCITY ---
         # Parents: Past_Velocity, Input_Velocity
-        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.LOW)}] = [
-            0.98, 0.02, 0.00]
-        self.bn.cpt("Current_Velocity")[
-            {'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.40, 0.60, 0.00]
-        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.HIGH)}] = [
-            0.05, 0.45, 0.50]
-        self.bn.cpt("Current_Velocity")[
-            {'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.LOW)}] = [0.50, 0.50, 0.00]
-        self.bn.cpt("Current_Velocity")[
-            {'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.05, 0.90, 0.05]
-        self.bn.cpt("Current_Velocity")[
-            {'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.HIGH)}] = [0.00, 0.30, 0.70]
-        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.LOW)}] = [
-            0.20, 0.60, 0.20]
-        self.bn.cpt("Current_Velocity")[
-            {'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.05, 0.45, 0.50]
-        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.HIGH)}] = [
-            0.00, 0.05, 0.95]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.LOW)}] = [0.98, 0.02, 0.00]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.40, 0.60, 0.00]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.LOW), 'Input_Velocity': int(Velocity.HIGH)}] = [0.05, 0.45, 0.50]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.LOW)}] = [0.50, 0.50, 0.00]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.05, 0.90, 0.05]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.MEDIUM), 'Input_Velocity': int(Velocity.HIGH)}] = [0.00, 0.30, 0.70]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.LOW)}] = [0.20, 0.60, 0.20]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.MEDIUM)}] = [0.05, 0.45, 0.50]
+        self.bn.cpt("Current_Velocity")[{'Past_Velocity': int(Velocity.HIGH), 'Input_Velocity': int(Velocity.HIGH)}] = [0.00, 0.05, 0.95]
 
         # --- 3. CURRENT MOMENTUM ---
         # Parents: Past_Momentum, Current_Density
-        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.LOW)}] = [
-            0.99, 0.01, 0.00]
-        self.bn.cpt("Current_Momentum")[
-            {'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.MEDIUM)}] = [0.20, 0.80, 0.00]
-        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.HIGH)}] = [
-            0.00, 0.30, 0.70]
-        self.bn.cpt("Current_Momentum")[
-            {'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.LOW)}] = [0.40, 0.60, 0.00]
-        self.bn.cpt("Current_Momentum")[
-            {'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.MEDIUM)}] = [0.05, 0.90, 0.05]
-        self.bn.cpt("Current_Momentum")[
-            {'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.HIGH)}] = [0.00, 0.40, 0.60]
-        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.LOW)}] = [
-            0.05, 0.80, 0.15]
-        self.bn.cpt("Current_Momentum")[
-            {'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.MEDIUM)}] = [0.00, 0.20, 0.80]
-        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.HIGH)}] = [
-            0.00, 0.01, 0.99]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.LOW)}] = [0.99, 0.01, 0.00]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.MEDIUM)}] = [0.20, 0.80, 0.00]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.LOW), 'Current_Density': int(Density.HIGH)}] = [0.00, 0.30, 0.70]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.LOW)}] = [0.60, 0.40, 0.00]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.MEDIUM)}] = [0.05, 0.90, 0.05]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.MEDIUM), 'Current_Density': int(Density.HIGH)}] = [0.00, 0.40, 0.60]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.LOW)}] = [0.05, 0.80, 0.15]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.MEDIUM)}] = [0.00, 0.20, 0.80]
+        self.bn.cpt("Current_Momentum")[{'Past_Momentum': int(Momentum.HIGH), 'Current_Density': int(Density.HIGH)}] = [0.00, 0.01, 0.99]
 
         # --- 4. CURRENT TENSION ---
         # Parents: Past_Tension, Current_Velocity
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.LOW)}] = [
-            0.90, 0.10, 0.00]
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.MEDIUM)}] = [
-            0.30, 0.60, 0.10]
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.HIGH)}] = [
-            0.05, 0.25, 0.70]
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.LOW)}] = [
-            0.60, 0.35, 0.05]
-        self.bn.cpt("Current_Tension")[
-            {'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.MEDIUM)}] = [0.10, 0.80, 0.10]
-        self.bn.cpt("Current_Tension")[
-            {'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.HIGH)}] = [0.00, 0.20, 0.80]
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.LOW)}] = [
-            0.10, 0.70, 0.20]
-        self.bn.cpt("Current_Tension")[
-            {'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.MEDIUM)}] = [0.00, 0.30, 0.70]
-        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.HIGH)}] = [
-            0.00, 0.05, 0.95]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.LOW)}] = [0.90, 0.10, 0.00]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.MEDIUM)}] = [0.30, 0.60, 0.10]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.LOW), 'Current_Velocity': int(Velocity.HIGH)}] = [0.05, 0.25, 0.70]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.LOW)}] = [0.60, 0.35, 0.05]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.MEDIUM)}] = [0.10, 0.80, 0.10]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.MEDIUM), 'Current_Velocity': int(Velocity.HIGH)}] = [0.00, 0.20, 0.80]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.LOW)}] = [0.10, 0.70, 0.20]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.MEDIUM)}] = [0.00, 0.30, 0.70]
+        self.bn.cpt("Current_Tension")[{'Past_Tension': int(Tension.HIGH), 'Current_Velocity': int(Velocity.HIGH)}] = [0.00, 0.05, 0.95]
 
         # --- 5. CURRENT ANCHOR ---
         # The anchor_table loop now uses contiguous indices 0-4
         anchor_table = [
-            (Anchor.ROOT, [0.95, 0.01, 0.01, 0.01, 0.02], [0.60, 0.10, 0.10, 0.10, 0.10],
-             [0.05, 0.25, 0.20, 0.30, 0.20]),
-            (Anchor.SECOND, [0.02, 0.95, 0.01, 0.01, 0.01], [0.20, 0.50, 0.10, 0.10, 0.10],
-             [0.40, 0.05, 0.15, 0.10, 0.30]),
-            (Anchor.THIRD, [0.01, 0.01, 0.95, 0.02, 0.01], [0.10, 0.10, 0.60, 0.10, 0.10],
-             [0.30, 0.10, 0.05, 0.40, 0.15]),
-            (Anchor.FOURTH, [0.01, 0.01, 0.01, 0.95, 0.02], [0.15, 0.10, 0.10, 0.50, 0.15],
-             [0.50, 0.05, 0.05, 0.05, 0.35]),
-            (Anchor.FIFTH, [0.05, 0.00, 0.00, 0.00, 0.95], [0.30, 0.05, 0.05, 0.05, 0.55],
-             [0.80, 0.05, 0.05, 0.05, 0.05])
+            (Anchor.ROOT, [0.95, 0.01, 0.01, 0.01, 0.02], [0.60, 0.10, 0.10, 0.10, 0.10],[0.05, 0.25, 0.20, 0.30, 0.20]),
+            (Anchor.SECOND, [0.02, 0.95, 0.01, 0.01, 0.01], [0.20, 0.50, 0.10, 0.10, 0.10],[0.40, 0.05, 0.15, 0.10, 0.30]),
+            (Anchor.THIRD, [0.01, 0.01, 0.95, 0.02, 0.01], [0.10, 0.10, 0.60, 0.10, 0.10],[0.30, 0.10, 0.05, 0.40, 0.15]),
+            (Anchor.FOURTH, [0.01, 0.01, 0.01, 0.95, 0.02], [0.15, 0.10, 0.10, 0.50, 0.15],[0.50, 0.05, 0.05, 0.05, 0.35]),
+            (Anchor.FIFTH, [0.05, 0.00, 0.00, 0.00, 0.95], [0.30, 0.05, 0.05, 0.05, 0.55],[0.80, 0.05, 0.05, 0.05, 0.05])
         ]
         for past_a, low_t, med_t, high_t in anchor_table:
             self.bn.cpt("Current_Anchor")[{'Past_Anchor': int(past_a), 'Current_Tension': int(Tension.LOW)}] = low_t
@@ -241,12 +196,9 @@ class DynamicBayesianNetwork:
         # Parents: Override, Current_Momentum
         for v in ['Bass', 'Lead', 'Embellish']:
             # Normal play logic (Override=NONE)
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.LOW)}] = [0.95,
-                                                                                                                 0.05]
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.MEDIUM)}] = [
-                0.40, 0.60]
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.HIGH)}] = [0.10,
-                                                                                                                  0.90]
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.LOW)}] = [0.95, 0.05]
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.MEDIUM)}] = [0.40, 0.60]
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.HIGH)}] = [0.10, 0.90]
             # Forced Trigger (Override=ALL)
             for m in Momentum:
                 self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.ALL), 'Current_Momentum': int(m)}] = [0.00, 1.00]
