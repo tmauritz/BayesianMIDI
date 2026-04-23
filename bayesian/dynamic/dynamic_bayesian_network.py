@@ -252,7 +252,7 @@ class DynamicBayesianNetwork:
         rotated = weights[-anchor_offset:] + weights[:-anchor_offset]
         return rotated
 
-    def tick(self, input_density, input_velocity, override_active=False):
+    def tick(self, input_density, input_velocity, override_active=False, silent=False):
         """
         Executes one metronome pulse and displays current network decisions.
         """
@@ -288,15 +288,70 @@ class DynamicBayesianNetwork:
         # 3. Calculate Latency
         inference_ms = (time.perf_counter() - start_time) * 1000
 
-        # 4. Print Table Row (Pulling directly from current_results)
-        # This reflects exactly what the network just decided
-        anchor_name = Anchor(current_results['Anchor']).name
-        tension_name = Tension(current_results['Tension']).name
-        momentum_name = Momentum(current_results['Momentum']).name
-
-        print(f"{inference_ms:8.2f} ms | {anchor_name:^15} | {tension_name:^15} | {momentum_name:^15}")
+        if not silent:
+            # 4. Print Table Row (Pulling directly from current_results)
+            anchor_name = Anchor(current_results['Anchor']).name
+            tension_name = Tension(current_results['Tension']).name
+            momentum_name = Momentum(current_results['Momentum']).name
+            print(f"{inference_ms:8.2f} ms | {anchor_name:^15} | {tension_name:^15} | {momentum_name:^15}")
 
         return inference_ms
+
+    def resolve_outputs(self, silent=False):
+        """
+        Translates inferred probabilities into MIDI messages and logs to console.
+        Returns a list of messages and the time taken for resolution.
+        """
+        res_start = time.perf_counter()
+        outputs = []
+
+        # 1. Harmonic Context: Get the current anchor offset for transposition
+        # ROOT=0, SECOND=2, THIRD=3, FOURTH=5, FIFTH=7
+        anchor_offsets = [0, 2, 3, 5, 7]
+        # Access the current anchor from the network decision
+        winning_inst = self.ie.posterior(self.ids["Current_Anchor"]).argmax()[0][0]
+        current_anchor_idx = winning_inst["Current_Anchor"]
+        semitone_base = anchor_offsets[current_anchor_idx]
+
+        voices = {
+            'Bass': {'chan': 1, 'octave': 36},
+            'Lead': {'chan': 2, 'octave': 60},
+            'Embellish': {'chan': 3, 'octave': 72}
+        }
+
+        log_parts = []
+        for name, config in voices.items():
+            # A. GATE: Sample Play/Rest
+            gate_dist = self.ie.posterior(self.ids[f'{name}_Gate']).tolist()
+            if random.choices([False, True], weights=gate_dist)[0]:
+
+                # B. PITCH: Sample Interval + Apply Anchor Transposition
+                pitch_dist = self.ie.posterior(self.ids[f'{name}_Pitch']).tolist()
+                interval = random.choices(range(12), weights=pitch_dist)[0]
+                final_note = config['octave'] + semitone_base + interval
+
+                # C. VELOCITY: Sample mapped MIDI velocity
+                vel_dist = self.ie.posterior(self.ids[f'{name}_Velocity']).tolist()
+                vel_state = random.choices([45, 85, 115], weights=vel_dist)[0]
+
+                outputs.append({
+                    "voice": name,
+                    "channel": config['chan'],
+                    "note": final_note,
+                    "velocity": vel_state
+                })
+                log_parts.append(f"{name[0]}:{final_note}({vel_state})")
+            else:
+                log_parts.append(f"{name[0]}:--")
+
+        res_ms = (time.perf_counter() - res_start) * 1000
+
+        if not silent:
+            # Log resolution result to console
+            voice_log = " | ".join(log_parts)
+            print(f"      L Output Res: {res_ms:4.2f}ms | {voice_log}")
+
+        return outputs, res_ms
 
     def export_all_cpts(self):
         """
@@ -380,6 +435,8 @@ if __name__ == "__main__":
     latencies = []
     for d, v in sequence:
         ms = network.tick(d, v)
+        midi_messages, res_ms = network.resolve_outputs()
+
         latencies.append(ms)
         time.sleep(0.1)  # Simulate 120 BPM
 

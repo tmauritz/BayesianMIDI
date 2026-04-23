@@ -6,51 +6,48 @@ from bayesian.dynamic.dynamic_bayesian_network import *
 
 
 def run_large_simulation(network, iterations=1000):
-    """
-    Simulates a large number of beats with varied input to test
-    the system's long-term stability and performance.
-    """
-    results_path = os.path.join("out", "simulation_results.csv")
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    filename = "bayesMIDI_benchmark.csv"
+    name, extension = filename.split(".")
+    new_filename = f"{name}_{timestamp}.{extension}"
+    results_path = os.path.join("out", new_filename)
     os.makedirs("out", exist_ok=True)
-
-    # Prepare data for logging
     log_data = []
 
-    print(f"Starting simulation of {iterations} beats...")
+    print("Starting Simulation Runs...")
 
     for i in range(iterations):
-        # 1. Generate randomized musical input
-        # Bias toward MEDIUM/HIGH to test tension, or LOW to test decay
-        in_density = random.choices([Density.LOW, Density.MEDIUM, Density.HIGH], weights=[0.2, 0.5, 0.3])[0]
-        in_velocity = random.choices([Velocity.LOW, Velocity.MEDIUM, Velocity.HIGH], weights=[0.2, 0.5, 0.3])[0]
+        # Generate varied inputs
+        in_d = random.choice(list(Density))
+        in_v = random.choice(list(Velocity))
 
-        # 2. Run Inference and capture performance
-        # Note: Set override_active to True occasionally to test pad triggers
-        is_override = (random.random() < 0.05)
+        # 1. Measure the 'Brain'
+        inf_ms = network.tick(in_d, in_v, silent=True)
 
-        start_time = time.perf_counter()
-        ms = network.tick(in_density, in_velocity, override_active=is_override)
+        # 2. Measure the 'Hands'
+        midi_msgs, res_ms = network.resolve_outputs(silent=True)
 
-        # 3. Log the state results
         log_data.append({
             "beat": i,
-            "latency_ms": ms,
-            "input_density": in_density.name,
-            "input_velocity": in_velocity.name,
+            "inference_ms": inf_ms,
+            "resolution_ms": res_ms,
+            "total_ms": inf_ms + res_ms,
             "anchor": Anchor(network.memory["Past_Anchor"]).name,
-            "tension": Tension(network.memory["Past_Tension"]).name,
-            "momentum": Momentum(network.memory["Past_Momentum"]).name
+            "voice_count": len(midi_msgs)
         })
 
-    # 4. Write to CSV
-    keys = log_data[0].keys()
-    with open(results_path, 'w', newline='') as output_file:
-        dict_writer = csv.DictWriter(output_file, fieldnames=keys)
-        dict_writer.writeheader()
-        dict_writer.writerows(log_data)
+    # Save to CSV for thesis analysis
+    with open(results_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=log_data[0].keys())
+        writer.writeheader()
+        writer.writerows(log_data)
 
-    print(f"Simulation complete. Data saved to {results_path}")
-
+    print("Finished.")
+    print("-" * 65)
+    avg_inf = sum(d['inference_ms'] for d in log_data) / iterations
+    avg_res = sum(d['resolution_ms'] for d in log_data) / iterations
+    print(f"Averages -> Inference: {avg_inf:.4f}ms | Resolution: {avg_res:.4f}ms")
 
 if __name__ == "__main__":
     network = DynamicBayesianNetwork()
