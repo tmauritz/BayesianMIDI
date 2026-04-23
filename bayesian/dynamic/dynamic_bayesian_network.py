@@ -301,11 +301,11 @@ class DynamicBayesianNetwork:
 
     def tick(self, input_density, input_velocity, override_active=False):
         """
-        Executes one metronome pulse, updates memory, and returns latency.
+        Executes one metronome pulse and displays current network decisions.
         """
         start_time = time.perf_counter()
 
-        # 1. Set Evidence (Hardware Inputs + Memory of Past States)
+        # 1. Set Evidence (Inputs + Memory of previous states)
         evidence = {
             self.ids['Input_Density']: int(input_density),
             self.ids['Input_Velocity']: int(input_velocity),
@@ -317,23 +317,31 @@ class DynamicBayesianNetwork:
         self.ie.setEvidence(evidence)
         self.ie.makeInference()
 
-        # 2. Update Memory: Extract only the integer index from argmax()
+        # 2. Extract Current Results for Display and Memory Update
+        # We create a temporary dictionary for this tick's results
+        current_results = {}
         for key in ["Momentum", "Anchor", "Tension", "Density", "Velocity"]:
-            node_id = self.ids[f"Current_{key}"]
+            node_name = f"Current_{key}"
+            node_id = self.ids[node_name]
 
-            # argmax() returns (Instantiation, MaxProbValue)
-            # .argmax()[0] gets the Instantiation
-            # .argmax()[0][0] gets the value (index) of the variable at position 0
-            best_index = self.ie.posterior(node_id).argmax()[0][0]
-            self.memory[f"Past_{key}"] = int(best_index[f"Current_{key}"])
+            # argmax()[0] returns the Instantiation (the winning state)
+            # inst[node_name] retrieves the integer index of that state
+            winning_inst = self.ie.posterior(node_id).argmax()[0][0]
+            current_index = winning_inst[node_name]
+
+            # Store the integer index in our "Past" memory for the next tick
+            self.memory[f"Past_{key}"] = int(current_index)
+            # Keep a local copy for the print statement
+            current_results[key] = int(current_index)
 
         # 3. Calculate Latency
         inference_ms = (time.perf_counter() - start_time) * 1000
 
-        # 4. Print Table Row using Enum names
-        anchor_name = Anchor(self.memory['Past_Anchor']).name
-        tension_name = Tension(self.memory['Past_Tension']).name
-        momentum_name = Momentum(self.memory['Past_Momentum']).name
+        # 4. Print Table Row (Pulling directly from current_results)
+        # This reflects exactly what the network just decided
+        anchor_name = Anchor(current_results['Anchor']).name
+        tension_name = Tension(current_results['Tension']).name
+        momentum_name = Momentum(current_results['Momentum']).name
 
         print(f"{inference_ms:8.2f} ms | {anchor_name:^15} | {tension_name:^15} | {momentum_name:^15}")
 
@@ -396,8 +404,20 @@ if __name__ == "__main__":
         (Density.LOW, Velocity.LOW),  # Beat 1: Starting soft
         (Density.MEDIUM, Velocity.MEDIUM),  # Beat 2: Building up
         (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
+        (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
+        (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
+        (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
+        (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
+        (Density.HIGH, Velocity.HIGH),  # Beat 3: Peak intensity
         (Density.HIGH, Velocity.HIGH),  # Beat 4: Sustaining climax
         (Density.LOW, Velocity.LOW),  # Beat 5: Sudden stop (Watch Momentum/Ghosting)
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
+        (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
         (Density.LOW, Velocity.LOW),  # Beat 6: Continued silence
         (Density.LOW, Velocity.LOW),  # Beat 7: Tension should be dropping
         (Density.LOW, Velocity.LOW),  # Beat 8: Return to rest
@@ -410,7 +430,7 @@ if __name__ == "__main__":
     for d, v in sequence:
         ms = network.tick(d, v)
         latencies.append(ms)
-        time.sleep(0.5)  # Simulate 120 BPM
+        time.sleep(0.1)  # Simulate 120 BPM
 
     print("-" * 65)
     print(f"Average Latency: {sum(latencies) / len(latencies):.2f}ms")
