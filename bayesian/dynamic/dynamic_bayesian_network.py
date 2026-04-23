@@ -40,17 +40,20 @@ class Override(IntEnum):
 class DynamicBayesianNetwork:
 
     memory = {
-        "Past_Momentum": Momentum.LOW,
-        "Past_Anchor": Anchor.ROOT,
-        "Past_Tension": Tension.LOW,
-        "Past_Density": Density.LOW,
-        "Past_Velocity": Velocity.LOW
+        "Past_Momentum": 0,
+        "Past_Anchor": 0,
+        "Past_Tension": 0,
+        "Past_Density": 0,
+        "Past_Velocity": 0
     }
 
     def __init__(self):
         print("Initializing Dynamic Network...")
         self.bn = self._build_network()
         self._fill_cpts()
+
+        self.ie = gum.VariableElimination(self.bn)
+        self.ids = {name: self.bn.idFromName(name) for name in self.bn.names()}
 
     def _build_network(self):
         '''
@@ -121,6 +124,12 @@ class DynamicBayesianNetwork:
         """
         Populates all CPTs in the network using the values from DBN_CPTs.md.
         """
+        # Initialize CPTs with uniform distribution to avoid proba=0
+        for node in self.bn.names():
+            if self.bn.cpt(node).domainSize() > 0:
+                self.bn.cpt(node).fillWith(1.0 / self.bn.variable(node).domainSize())
+
+        # Now we apply your specific musical logic overrides
         # --- 1. CURRENT DENSITY ---
         # Parents: Past_Density, Input_Density
         self.bn.cpt("Current_Density")[{'Past_Density': int(Density.LOW), 'Input_Density': int(Density.LOW)}] = [0.95,
@@ -291,39 +300,42 @@ class DynamicBayesianNetwork:
         return rotated
 
     def tick(self, input_density, input_velocity, override_active=False):
-        # Start the clock
+        """
+        Executes one metronome pulse, updates memory, and returns latency.
+        """
         start_time = time.perf_counter()
 
-        ie = gum.LazyPropagation(self.bn)
-
-        # 1. SET EVIDENCE
+        # 1. Set Evidence (Hardware Inputs + Memory of Past States)
+        evidence = {
+            self.ids['Input_Density']: int(input_density),
+            self.ids['Input_Velocity']: int(input_velocity),
+            self.ids['Override']: int(Override.ALL if override_active else Override.NONE)
+        }
         for key, value in self.memory.items():
-            ie.setEvidence({key: int(value)})
+            evidence[self.ids[key]] = int(value)
 
-        ie.setEvidence({
-            'Input_Density': int(input_density),
-            'Input_Velocity': int(input_velocity),
-            'Override': int(Override.ALL if override_active else Override.NONE)
-        })
+        self.ie.setEvidence(evidence)
+        self.ie.makeInference()
 
-        # 2. PERFORM INFERENCE (The computationally expensive part)
-        ie.makeInference()
+        # 2. Update Memory: Extract only the integer index from argmax()
+        for key in ["Momentum", "Anchor", "Tension", "Density", "Velocity"]:
+            node_id = self.ids[f"Current_{key}"]
 
-        # 3. UPDATE MEMORY
-        self.memory["Past_Momentum"] = ie.posterior("Current_Momentum").argmax()
-        self.memory["Past_Anchor"] = ie.posterior("Current_Anchor").argmax()
-        self.memory["Past_Tension"] = ie.posterior("Current_Tension").argmax()
-        self.memory["Past_Density"] = ie.posterior("Current_Density").argmax()
-        self.memory["Past_Velocity"] = ie.posterior("Current_Velocity").argmax()
+            # argmax() returns (Instantiation, MaxProbValue)
+            # .argmax()[0] gets the Instantiation
+            # .argmax()[0][0] gets the value (index) of the variable at position 0
+            best_index = self.ie.posterior(node_id).argmax()[0][0]
+            self.memory[f"Past_{key}"] = int(best_index[f"Current_{key}"])
 
-        # Stop the clock after network is reset
-        end_time = time.perf_counter()
-        inference_ms = (end_time - start_time) * 1000
+        # 3. Calculate Latency
+        inference_ms = (time.perf_counter() - start_time) * 1000
 
-        # 4. REPORT RESULTS
-        print(f"[{inference_ms:5.2f}ms] | Anchor: {Anchor(self.memory['Past_Anchor']).name:7} | "
-              f"Tension: {Tension(self.memory['Past_Tension']).name:7} | "
-              f"Momentum: {Momentum(self.memory['Past_Momentum']).name:7}")
+        # 4. Print Table Row using Enum names
+        anchor_name = Anchor(self.memory['Past_Anchor']).name
+        tension_name = Tension(self.memory['Past_Tension']).name
+        momentum_name = Momentum(self.memory['Past_Momentum']).name
+
+        print(f"{inference_ms:8.2f} ms | {anchor_name:^15} | {tension_name:^15} | {momentum_name:^15}")
 
         return inference_ms
 
