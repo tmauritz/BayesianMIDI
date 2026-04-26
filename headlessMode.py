@@ -1,189 +1,130 @@
-import mido
-import queue
-import threading
-import time
 import sys
+import threading
+import mido
+import time
+import queue
+import random
 
-# Your project-specific imports
 from MidiScheduler import MidiScheduler
-from bayesian.bayesian_network_helpers import DrumType, BayesianInput
-from performance_settings import PerformanceSettings
-import bayesian.bayesian_network_ag_baked
+from bayesian.dynamic.dynamic_bayesian_network import DynamicBayesianNetwork, Density, Velocity
 
-GRACE_PERIOD_MS = 15
 
 class HeadlessBayesianPerformer:
     def __init__(self, input_name, output_name):
-        print(f"\n--- Initializing Headless Performer (Grace: {GRACE_PERIOD_MS}ms) ---")
+        print(f"\n--- Initializing DBN Performer ---")
 
-        # 1. Thread-Safe Communication
+        # 1. Communication & State
         self.work_queue = queue.Queue()
         self.processing_active = True
-
-        # 2. Timing State
         self.clock_tick_count = 0
         self.step_count = 0
         self.clock_running = False
 
-        # 3. Engines & Settings
-        self.bayesian_engine = bayesian.bayesian_network_ag_baked.BakedBayesianGenerator()
+        # 2. Engines
+        self.dbn = DynamicBayesianNetwork()
         self.scheduler = MidiScheduler()
-        self.settings = PerformanceSettings()
 
-        # 4. Buffers
-        self.midi_buffer = []
+        # 3. Input Buffers
+        self.hit_velocities = []
+        self.override_detected = False
 
-        # 5. Open Ports
+        # 4. Open Ports
         try:
             self.out_port = mido.open_output(output_name)
+            self.in_port = mido.open_input(input_name, callback=self.on_midi_message)
             self.scheduler.set_port(self.out_port)
 
-            self.in_port = mido.open_input(input_name, callback=self.on_midi_message)
-
-            # Access the underlying backend to disable clock filtering
+            # Unblock Clock
             backend = getattr(self.in_port, '_rt', getattr(self.in_port, 'callback_port', None))
             if backend:
-                # timing=False means "Don't ignore clock"
-                backend.ignore_types(timing=False, sysex=False, active_sense=True)
+                backend.ignore_types(timing=False, sysex=True, active_sense=True)
                 print(f">>> MIDI Clock Unblocked on {input_name}")
         except Exception as e:
-            print(f"CRITICAL ERROR opening ports: {e}")
+            print(f"CRITICAL ERROR: {e}")
             sys.exit(1)
 
-        # 6. Start the "Brain" thread
-        self.brain_thread = threading.Thread(target=self.brain_worker, daemon=True)
-        self.brain_thread.start()
-
-    def flush_work_queue(self):
-        """Clears any pending beats so the engine doesn't play catch-up."""
-        count = 0
-        while not self.work_queue.empty():
-            try:
-                self.work_queue.get_nowait()
-                count += 1
-            except queue.Empty:
-                break
-        if count > 0:
-            print(f">>> Flushed {count} stale steps from queue.")
+        # 5. Start Worker Thread
+        self.thread = threading.Thread(target=self.run_loop, daemon=True)
+        self.thread.start()
+        print(">>> Worker Thread Started")
 
     def on_midi_message(self, msg):
-        """
-        The 'Ear' (High-Priority Thread).
-        Must remain extremely fast to avoid missing clock pulses.
-        """
-        # --- Transport Control ---
-        if msg.type in ['start', 'continue']:
-            self.flush_work_queue()
+        """Real-time callback: Triggers tasks for the worker thread."""
+        if msg.type == 'clock':
+            if self.clock_running:
+                self.clock_tick_count += 1
+
+                # A. Trigger Resolution every 6 ticks (16th Note)
+                if self.clock_tick_count % 6 == 0:
+                    self.work_queue.put("RESOLVE_16TH")
+
+                # B. Trigger Inference every 24 ticks (Quarter Note)
+                if self.clock_tick_count >= 24:
+                    self.clock_tick_count = 0
+                    self.work_queue.put("INFER_BEAT")
+
+        elif msg.type == 'start':
             self.clock_running = True
             self.clock_tick_count = 0
-            self.step_count = 0
-            self.midi_buffer.clear()
-            print("\n[MIDI START/CONTINUE]")
-            return
+            print(">> MIDI START")
 
-        if msg.type == 'stop':
+        elif msg.type == 'stop':
             self.clock_running = False
-            self.flush_work_queue()
-            print("\n[MIDI STOP]")
-            return
-
-        # --- Timing Pulses (24 PPQN) ---
-        if msg.type == 'clock' and self.clock_running:
-            self.clock_tick_count += 1
-            if self.clock_tick_count >= 6:
-                self.clock_tick_count = 0
-
-                # 1. RECORD EXACT TRIGGER TIME
-                trigger_time = time.perf_counter()
-
-                # 2. Package everything for the Brain
-                bar = (self.step_count // 16) % 4
-                beat = ((self.step_count // 4) % 4) + 1
-                sub = self.step_count % 4
-
-                self.work_queue.put(('beat', trigger_time, bar, beat, sub))
-                self.step_count += 1
+            print(">> MIDI STOP")
 
         elif msg.type == 'note_on' and msg.velocity > 0:
-            if self.clock_running:
-                self.midi_buffer.append((self.settings.identify(msg.note), msg.velocity))
+            self.hit_velocities.append(msg.velocity)
+            if msg.note == 72:
+                self.override_detected = True
 
-    def brain_worker(self):
-        """Brain Thread: Monitors Jitter and Inference."""
-        while self.processing_active:
-            try:
-                task = self.work_queue.get(timeout=0.5)
-                if task[0] == 'beat':
-                    _, trigger_time, bar, beat, sub = task
+    def _calculate_input_states(self):
+        """Maps aggregated raw MIDI hits to DBN Enums."""
+        count = len(self.hit_velocities)
+        avg_vel = sum(self.hit_velocities) / count if count > 0 else 0
 
-                    # 1. Wait for Grace Period
-                    if GRACE_PERIOD_MS > 0:
-                        time.sleep(GRACE_PERIOD_MS / 1000.0)
+        d = Density.LOW if count <= 1 else (Density.MEDIUM if count <= 3 else Density.HIGH)
+        v = Velocity.LOW if avg_vel < 45 else (Velocity.MEDIUM if avg_vel < 90 else Velocity.HIGH)
+        return d, v
 
-                    # 2. Calculate Wake Jitter
-                    # (Actual Time - Trigger Time) - Intended Delay
-                    # actual_wake_time = time.perf_counter()
-                    # total_delay_ms = (actual_wake_time - trigger_time) * 1000
-                    # jitter_ms = total_delay_ms - GRACE_PERIOD_MS
+    def process_inference(self):
+        """The 'Brain' cycle: Happens once per quarter note."""
+        d, v = self._calculate_input_states()
+        inf_ms = self.dbn.tick(d, v, override_active=self.override_detected, silent=True)
 
-                    # 3. Snapshot and Process
-                    snapshot = self.midi_buffer[:]
-                    self.midi_buffer.clear()
+        # Reset buffers for the next beat
+        self.hit_velocities = []
+        self.override_detected = False
+        self.step_count += 1
+        # print(f"Beat {self.step_count} | Brain: {inf_ms:.1f}ms")
 
-                    self.process_step(snapshot, bar, beat, sub)
-                    # end_time = time.perf_counter()
-                    # duration_ms = (end_time - trigger_time) * 1000
-                    # print(f"Total Time: {duration_ms}ms, Jitter {jitter_ms}ms")
-            except queue.Empty:
-                continue
+    def process_resolution(self):
+        """The 'Hands' cycle: Happens once per sixteenth note."""
+        midi_msgs, res_ms = self.dbn.resolve_outputs(silent=True)
 
-    def process_step(self, events, bar, beat, sub):
-        """Performs Bayesian inference and schedules MIDI output."""
-        start_perf = time.perf_counter()
-
-        # 1. Determine dominant hit for this 16th note
-        dominant_drum = DrumType.NONE
-        max_vel = 0
-        for d, v in events:
-            if v > max_vel:
-                max_vel, dominant_drum = v, d
-
-        # 2. Build Evidence
-        # Step (1-16)
-        current_step = ((beat - 1) * 4) + sub + 1
-        evidence = BayesianInput(
-            drum_type=dominant_drum,
-            velocity=max_vel,
-            bar=bar,
-            step=current_step
-        )
-
-        # 3. Bayesian Inference (The 'Heavy' Part)
-        result = self.bayesian_engine.infer(evidence)
-
-        # 4. Schedule Output
-        if result.should_play:
+        for msg in midi_msgs:
+            # Send to Scheduler for immediate Note On + Managed Note Off
             self.scheduler.play_note(
-                note=result.midi_note,
-                velocity=result.velocity,
-                channel=result.channel,
-                duration=result.duration
+                note=msg['note'],
+                velocity=msg['velocity'],
+                channel=msg['channel'],
+                duration=0.1  # 150ms sustain for testing
             )
 
-        # 5. Performance Profiling
-        end_perf = time.perf_counter()
-        duration_ms = (end_perf - start_perf) * 1000
-
-        # Output current status to console
-        # If duration_ms > 125ms (at 120bpm), you are lagging!
-        status_msg = f"Bar {bar:02} | {beat}.{sub} | Input: {dominant_drum.name:6} | Inference: {duration_ms:4.1f}ms"
-
-        if result.should_play:
-            print(f"{status_msg} | ACTION: PLAY {result.midi_note}")
-        elif duration_ms > 50:
-            # Only print 'quiet' steps if they are suspiciously slow
-            print(f"{status_msg} | [SLOW STEP]")
-
+    def run_loop(self):
+        """Main thread loop for non-blocking processing."""
+        try:
+            while self.processing_active:
+                try:
+                    task = self.work_queue.get(timeout=0.1)
+                    if task == "INFER_BEAT":
+                        self.process_inference()
+                    elif task == "RESOLVE_16TH":
+                        self.process_resolution()
+                except queue.Empty:
+                    continue
+        except KeyboardInterrupt:
+            self.processing_active = False
+            print("\nShutting down Performer...")
 
 def select_port(port_list, port_type):
     """Helper to pick MIDI ports via terminal input."""
@@ -230,4 +171,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nShutting down Performer...")
         performer.processing_active = False
-        performer.scheduler.stop()
