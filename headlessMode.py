@@ -82,7 +82,7 @@ class HeadlessBayesianPerformer:
         count = len(self.hit_velocities)
         avg_vel = sum(self.hit_velocities) / count if count > 0 else 0
 
-        d = Density.LOW if count <= 1 else (Density.MEDIUM if count <= 3 else Density.HIGH)
+        d = Density.LOW if count <= 1 else (Density.MEDIUM if count <= 10 else Density.HIGH)
         v = Velocity.LOW if avg_vel < 45 else (Velocity.MEDIUM if avg_vel < 90 else Velocity.HIGH)
         return d, v
 
