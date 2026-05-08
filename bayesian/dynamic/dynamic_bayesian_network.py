@@ -51,6 +51,12 @@ DURATION_MAP = {
     NoteDuration.LONG: 1.20     # Sustained pad/drone feel
 }
 
+# Mapping DBN Velocity states to actual velocities used by the scheduler
+VELOCITY_MAP = {
+    Velocity.LOW: 45,
+    Velocity.MEDIUM: 85,
+    Velocity.HIGH: 120
+}
 
 class DynamicBayesianNetwork:
 
@@ -226,7 +232,7 @@ class DynamicBayesianNetwork:
                     [0.00, 0.00, 1.00, 0.00]
 
         # --- 7. VOICE PITCHES ---
-        # Map the contiguous Anchor Enum to your specific semitone intervals
+        # Map the contiguous Anchor Enum to the specific semitone intervals
         anchor_offsets = {
             Anchor.ROOT: 0,
             Anchor.SECOND: 2,
@@ -354,13 +360,13 @@ class DynamicBayesianNetwork:
 
                 # C. VELOCITY: Sample mapped MIDI velocity
                 vel_dist = self.ie.posterior(self.ids[f'{name}_Velocity']).tolist()
-                vel_state = random.choices([45, 85, 115], weights=vel_dist)[0]
+                vel_state = random.choices(list(Velocity), weights=vel_dist)[0]
 
                 outputs.append({
                     "voice": name,
                     "channel": config['chan'],
                     "note": final_note,
-                    "velocity": vel_state,
+                    "velocity": VELOCITY_MAP[vel_state],
                     "duration": DURATION_MAP[gate_state]
                 })
                 # Log format: V:Note(Vel)[Duration_Initial]
