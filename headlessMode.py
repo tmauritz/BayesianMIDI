@@ -99,7 +99,7 @@ class HeadlessBayesianPerformer:
 
     def process_resolution(self):
         """The 'Hands' cycle: Happens once per sixteenth note."""
-        midi_msgs, res_ms = self.dbn.resolve_outputs(silent=True)
+        midi_msgs = self.dbn.resolve_outputs(silent=True)
 
         for msg in midi_msgs:
             # Send to Scheduler for immediate Note On + Managed Note Off
@@ -107,7 +107,7 @@ class HeadlessBayesianPerformer:
                 note=msg['note'],
                 velocity=msg['velocity'],
                 channel=msg['channel'],
-                duration=0.1  # 150ms sustain for testing
+                duration=msg['duration']
             )
 
     def run_loop(self):

@@ -26,7 +26,9 @@ def run_large_simulation(network, iterations=1000):
         inf_ms = network.tick(in_d, in_v, silent=True)
 
         # 2. Measure the 'Hands'
-        midi_msgs, res_ms = network.resolve_outputs(silent=True)
+        res_start = time.perf_counter()
+        midi_msgs = network.resolve_outputs(silent=True)
+        res_ms = (time.perf_counter() - res_start) * 1000
 
         log_data.append({
             "beat": i,

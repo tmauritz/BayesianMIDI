@@ -38,6 +38,20 @@ class Override(IntEnum):
     NONE = 0
     ALL = 1
 
+class NoteDuration(IntEnum):
+    REST = 0
+    SHORT = 1
+    MEDIUM = 2
+    LONG = 3
+
+# Mapping the DBN states to actual scheduler seconds
+DURATION_MAP = {
+    NoteDuration.SHORT: 0.12,   # Crisp 16th note feel
+    NoteDuration.MEDIUM: 0.45,  # Breathable 4th note feel
+    NoteDuration.LONG: 1.20     # Sustained pad/drone feel
+}
+
+
 class DynamicBayesianNetwork:
 
     memory = {
@@ -88,7 +102,7 @@ class DynamicBayesianNetwork:
         voices = ['Bass', 'Lead', 'Embellish']
 
         for v in voices:
-            dbn.add(gum.LabelizedVariable(f'{v}_Gate', f'{v}_Gate', ['Rest', 'Play']))
+            dbn.add(gum.LabelizedVariable(f'{v}_Gate', f'{v}_Gate', len(NoteDuration)))
             dbn.add(gum.LabelizedVariable(f'{v}_Pitch', f'{v}_Pitch', 12))
             dbn.add(gum.LabelizedVariable(f'{v}_Velocity', f'{v}_Velocity', len(Velocity)))
 
@@ -196,13 +210,20 @@ class DynamicBayesianNetwork:
         # --- 6. VOICE GATES ---
         # Parents: Override, Current_Momentum
         for v in ['Bass', 'Lead', 'Embellish']:
-            # Normal play logic (Override=NONE)
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.LOW)}] = [0.95, 0.05]
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.MEDIUM)}] = [0.40, 0.60]
-            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.HIGH)}] = [0.10, 0.90]
-            # Forced Trigger (Override=ALL)
+            # P(REST, SHORT, MEDIUM, LONG)
+            # LOW Momentum: Mostly Rests, but if it plays, it's LONG
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.LOW)}] = \
+                [0.85, 0.00, 0.05, 0.10]
+            # MEDIUM Momentum: Balanced grooving, favors MEDIUM sustain
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.MEDIUM)}] = \
+                [0.30, 0.20, 0.40, 0.10]
+            # HIGH Momentum: Dense saturation, favors SHORT percussive notes
+            self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.HIGH)}] = \
+                [0.05, 0.75, 0.15, 0.05]
+            # Override Logic: Force a MEDIUM stab
             for m in Momentum:
-                self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.ALL), 'Current_Momentum': int(m)}] = [0.00, 1.00]
+                self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.ALL), 'Current_Momentum': int(m)}] = \
+                    [0.00, 0.00, 1.00, 0.00]
 
         # --- 7. VOICE PITCHES ---
         # Map the contiguous Anchor Enum to your specific semitone intervals
@@ -323,8 +344,9 @@ class DynamicBayesianNetwork:
         for name, config in voices.items():
             # A. GATE: Sample Play/Rest
             gate_dist = self.ie.posterior(self.ids[f'{name}_Gate']).tolist()
-            if random.choices([False, True], weights=gate_dist)[0]:
+            gate_state = random.choices(list(NoteDuration), weights=gate_dist)[0]
 
+            if gate_state != NoteDuration.REST:
                 # B. PITCH: Sample Interval + Apply Anchor Transposition
                 pitch_dist = self.ie.posterior(self.ids[f'{name}_Pitch']).tolist()
                 interval = random.choices(range(12), weights=pitch_dist)[0]
@@ -338,9 +360,11 @@ class DynamicBayesianNetwork:
                     "voice": name,
                     "channel": config['chan'],
                     "note": final_note,
-                    "velocity": vel_state
+                    "velocity": vel_state,
+                    "duration": DURATION_MAP[gate_state]
                 })
-                log_parts.append(f"{name[0]}:{final_note}({vel_state})")
+                # Log format: V:Note(Vel)[Duration_Initial]
+                log_parts.append(f"{name[0]}:{final_note}({vel_state})[{gate_state.name[0]}]")
             else:
                 log_parts.append(f"{name[0]}:--")
 
@@ -351,7 +375,7 @@ class DynamicBayesianNetwork:
             voice_log = " | ".join(log_parts)
             print(f"      L Output Res: {res_ms:4.2f}ms | {voice_log}")
 
-        return outputs, res_ms
+        return outputs
 
     def export_all_cpts(self):
         """
@@ -435,7 +459,7 @@ if __name__ == "__main__":
     latencies = []
     for d, v in sequence:
         ms = network.tick(d, v)
-        midi_messages, res_ms = network.resolve_outputs()
+        midi_messages = network.resolve_outputs()
 
         latencies.append(ms)
         time.sleep(0.1)  # Simulate 120 BPM
