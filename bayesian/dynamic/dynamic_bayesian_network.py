@@ -46,9 +46,9 @@ class NoteDuration(IntEnum):
 
 # Mapping the DBN states to actual scheduler seconds
 DURATION_MAP = {
-    NoteDuration.SHORT: 0.12,   # Crisp 16th note feel
+    NoteDuration.SHORT: 0.10,   # Crisp 16th note feel
     NoteDuration.MEDIUM: 0.45,  # Breathable 4th note feel
-    NoteDuration.LONG: 1.20     # Sustained pad/drone feel
+    NoteDuration.LONG: 1.00     # Sustained pad/drone feel
 }
 
 # Mapping DBN Velocity states to actual velocities used by the scheduler
@@ -219,13 +219,13 @@ class DynamicBayesianNetwork:
             # P(REST, SHORT, MEDIUM, LONG)
             # LOW Momentum: Mostly Rests, but if it plays, it's LONG
             self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.LOW)}] = \
-                [0.85, 0.00, 0.05, 0.10]
+                [0.99, 0.00, 0.00, 0.01]
             # MEDIUM Momentum: Balanced grooving, favors MEDIUM sustain
             self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.MEDIUM)}] = \
-                [0.30, 0.20, 0.40, 0.10]
+                [0.50, 0.10, 0.30, 0.10]
             # HIGH Momentum: Dense saturation, favors SHORT percussive notes
             self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.NONE), 'Current_Momentum': int(Momentum.HIGH)}] = \
-                [0.05, 0.75, 0.15, 0.05]
+                [0.30, 0.70, 0.15, 0.00]
             # Override Logic: Force a MEDIUM stab
             for m in Momentum:
                 self.bn.cpt(f"{v}_Gate")[{'Override': int(Override.ALL), 'Current_Momentum': int(m)}] = \
